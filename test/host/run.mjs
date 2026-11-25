@@ -194,27 +194,21 @@ const octen = async (path, body) => {
 	});
 	return (await response.json()).data;
 };
-const only = args.only ? new Set(args.only.split(',')) : null;
+if ('only' in args && !(args.only ?? '').trim())
+	throw new Error('--only needs a comma-separated list of case names');
+const only =
+	'only' in args
+		? new Set(
+				args.only
+					.split(',')
+					.map((id) => id.trim())
+					.filter(Boolean),
+			)
+		: null;
 const selected = (id) => !only || only.has(id);
-const imageUrl = selected('imageByUrl')
-	? (
-			await octen('/image-search', {
-				inputs: [{ type: 'text', data: 'red mid-century sofa' }],
-				count: 1,
-			})
-		).results[0].url
-	: 'https://example.com/unused.png';
-const groupId = selected('designGroup')
-	? (
-			await octen('/design-search', {
-				query: 'SaaS pricing page',
-				images: { count: 5 },
-				web_search: { enable: false },
-			})
-		).images.find((image) => image.group?.group_id)?.group?.group_id
-	: 'unused';
-if (!imageUrl || !groupId)
-	throw new Error('Could not get an image URL or a design group ID from the API');
+// Filled in below, only for the selected cases, so a bad --only value fails before any paid call
+const imageUrl = '__IMAGE_URL__';
+const groupId = '__GROUP_ID__';
 
 const CASES = [
 	[
@@ -353,7 +347,7 @@ const CASES = [
 			simplify: true,
 			options: { includeDomains: 'rust-lang.org', timeRange: 'year', count: 3 },
 		}),
-		(items) => items.length > 0 && items.every((i) => hostOf(i.url).endsWith('rust-lang.org')),
+		(items) => items.length > 0 && items.every((i) => /(^|\.)rust-lang\.org$/.test(hostOf(i.url))),
 	],
 	[
 		nodeCase('searchImages', {
@@ -381,9 +375,13 @@ const CASES = [
 			simplify: true,
 			options: { latitude: 47.6062, longitude: -122.3321, radius: 2000, placeCount: 3 },
 		}),
-		(items) =>
-			items.some((i) => i.type === 'place') &&
-			items.every((i) => i.type !== 'place' || i.distance === undefined || i.distance <= 2000),
+		(items) => {
+			const distances = items.filter((i) => i.type === 'place').map((i) => i.distance);
+			return (
+				distances.some((d) => typeof d === 'number') &&
+				distances.every((d) => typeof d !== 'number' || d <= 2000)
+			);
+		},
 	],
 	[
 		nodeCase('designGroup', {
@@ -463,8 +461,36 @@ const CASES = [
 const unknown = only ? [...only].filter((id) => !CASES.some(([wf]) => wf.id === id)) : [];
 if (unknown.length > 0) throw new Error(`Unknown case names in --only: ${unknown.join(', ')}`);
 const cases = CASES.filter(([wf]) => selected(wf.id));
+const fixtures = {
+	__IMAGE_URL__: selected('imageByUrl')
+		? (
+				await octen('/image-search', {
+					inputs: [{ type: 'text', data: 'red mid-century sofa' }],
+					count: 1,
+				})
+			).results[0]?.url
+		: 'unused',
+	__GROUP_ID__: selected('designGroup')
+		? (
+				await octen('/design-search', {
+					query: 'SaaS pricing page',
+					images: { count: 5 },
+					web_search: { enable: false },
+				})
+			).images.find((image) => image.group?.group_id)?.group?.group_id
+		: 'unused',
+};
+if (!fixtures.__IMAGE_URL__ || !fixtures.__GROUP_ID__) {
+	throw new Error('Could not get an image URL or a design group ID from the API');
+}
 writeFileSync(join(io, 'credentials.json'), JSON.stringify(credentials));
-writeFileSync(join(io, 'workflows.json'), JSON.stringify(cases.map(([wf]) => wf)));
+writeFileSync(
+	join(io, 'workflows.json'),
+	JSON.stringify(cases.map(([wf]) => wf)).replace(
+		/__IMAGE_URL__|__GROUP_ID__/g,
+		(name) => fixtures[name],
+	),
+);
 run('chmod', ['-R', 'a+rwX', work]);
 
 const ids = cases.map(([wf]) => wf.id).join(' ');
@@ -540,13 +566,13 @@ for (const [wf, check] of cases) {
 		const delivered = evidence.filter(Boolean).some((v) => observed.includes(String(v)));
 		// And the answer must use what the tool returned: a returned URL that the prompt did not contain, the name
 		// of a returned place, or for Extract the returned page title.
-		// URLs compare whole: scheme, "www." and a trailing slash are ignored, the host is lower-cased, path and query keep their case
+		// URLs compare whole: scheme, "www." and a trailing slash are ignored, the host is lower-cased; port, path, query and fragment must match
 		const normalize = (url) => {
 			const text = String(url).replace(/[).,;:!?*\]>"'`]+$/, '');
 			const withScheme = /^[a-z]+:\/\//i.test(text) ? text : `https://${text}`;
 			try {
 				const u = new URL(withScheme);
-				return `${u.hostname.replace(/^www\./, '')}${u.pathname.replace(/\/+$/, '')}${u.search}`;
+				return `${u.hostname.replace(/^www\./, '')}${u.port ? `:${u.port}` : ''}${u.pathname.replace(/\/+$/, '')}${u.search}${u.hash}`;
 			} catch {
 				return '';
 			}
@@ -630,11 +656,8 @@ for (const [wf, check] of cases) {
 			const ready =
 				healthy &&
 				(await fetch(`${base}/rest/settings`)
-					.then((r) => r.json())
-					.then(
-						(body) => typeof body === 'object' && body !== null,
-						() => false,
-					));
+					.then(async (r) => r.ok && (await r.json())?.data?.userManagement !== undefined)
+					.catch(() => false));
 			if (ready) break;
 			if (i > 90) throw new Error('n8n server did not start');
 			await sleep(2000);

@@ -13,7 +13,8 @@ function splitList(value: unknown): string[] {
 function splitUrls(value: unknown): string[] {
 	if (Array.isArray(value)) return splitList(value);
 	return String(value ?? '')
-		.split(/\n|,\s+/)
+		.split('\n')
+		.flatMap((line) => line.split(/,[ \t]+/))
 		.map((url) => url.trim())
 		.filter((url) => url !== '');
 }

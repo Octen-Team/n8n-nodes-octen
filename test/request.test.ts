@@ -211,6 +211,9 @@ describe('buildBody', () => {
 		expect(
 			buildBody('extract', { urls: 'https://example.com/?sources=https://a.example,https://b.example' }, {}),
 		).toEqual({ urls: ['https://example.com/?sources=https://a.example,https://b.example'] });
+		expect(buildBody('extract', { urls: 'https://a.com/x,\nhttps://b.com' }, {})).toEqual({
+			urls: ['https://a.com/x,', 'https://b.com'],
+		});
 	});
 
 	it('leaves out the link options while Include Links is off', () => {
