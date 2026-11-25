@@ -1,11 +1,10 @@
 import type {
 	IAuthenticateGeneric,
 	Icon,
-	ICredentialTestFunction,
+	ICredentialTestRequest,
 	ICredentialType,
 	INodeProperties,
 } from 'n8n-workflow';
-import { octenApiTest } from './credentialTest';
 
 export class OctenApi implements ICredentialType {
 	name = 'octenApi';
@@ -43,6 +42,20 @@ export class OctenApi implements ICredentialType {
 		},
 	};
 
-	// A function rather than a request, so that only a positive answer counts as success
-	test: ICredentialTestFunction = octenApiTest;
+	// GET /monitors answers 200 only to a valid key (401 otherwise), so any other answer fails the test.
+	// Monitors need no extra access, unlike Video Search. Checked against the live API on 2026-11-25.
+	test: ICredentialTestRequest = {
+		request: {
+			baseURL: '={{ $credentials.baseUrl }}',
+			url: '/monitors',
+			method: 'GET',
+			qs: { limit: 1 },
+		},
+		rules: [
+			{
+				type: 'responseCode',
+				properties: { value: 401, message: 'The API key is not valid' },
+			},
+		],
+	};
 }

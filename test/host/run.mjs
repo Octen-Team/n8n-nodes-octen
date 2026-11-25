@@ -515,9 +515,12 @@ for (const [wf, check] of cases) {
 		const observed = (agentOutput.intermediateSteps ?? [])
 			.map((step) => String(step.observation ?? ''))
 			.join('\n');
-		const delivered = toolItems.some((i) =>
-			[i.url, i.title].filter(Boolean).some((v) => observed.includes(String(v))),
-		);
+		// Extract must have returned a page, and its title (content, not the URL from the prompt) must reach the model
+		const evidence =
+			wf.id === 'agent_extract'
+				? toolItems.filter((i) => i.status === 'success').map((i) => i.title)
+				: toolItems.flatMap((i) => [i.url, i.title, i.name, i.website]);
+		const delivered = evidence.filter(Boolean).some((v) => observed.includes(String(v)));
 		// And the answer must cite a source the tool returned that the prompt did not already contain
 		const hosts = toolItems
 			.flatMap((i) => [i.url, i.website, i.source_page])
@@ -543,6 +546,110 @@ for (const [wf, check] of cases) {
 	if (!ok) failed++;
 	console.log(`${ok ? 'PASS' : 'FAIL'} ${wf.id}: ${detail}`);
 }
+// The credential test only runs in the n8n server, so install the package as a community package there
+// (the way users install it) and test the credential through the REST API.
+{
+	const nodesDir = join(work, 'server', 'nodes');
+	mkdirSync(join(nodesDir, 'node_modules', '@octen.ai'), { recursive: true });
+	run('cp', ['-R', pkgDir, join(nodesDir, 'node_modules', '@octen.ai', 'n8n-nodes-octen')]);
+	writeFileSync(
+		join(nodesDir, 'package.json'),
+		JSON.stringify({
+			name: 'installed-nodes',
+			private: true,
+			dependencies: { '@octen.ai/n8n-nodes-octen': '0.1.0' },
+		}),
+	);
+	run('chmod', ['-R', 'a+rwX', join(work, 'server')]);
+	const port = args.port ?? '5689';
+	const container = `octen-n8n-host-${process.pid}`;
+	run('docker', [
+		'run',
+		'-d',
+		'--name',
+		container,
+		'-p',
+		`127.0.0.1:${port}:5678`,
+		'-e',
+		'N8N_DIAGNOSTICS_ENABLED=false',
+		'-e',
+		'N8N_SECURE_COOKIE=false',
+		'-v',
+		`${join(work, 'server')}:/home/node/.n8n`,
+		// n8n 1.x only loads community packages recorded by an npm install, so it also gets the files as a custom extension
+		...(LEGACY ? ['-e', 'N8N_CUSTOM_EXTENSIONS=/octen', '-v', `${pkgDir}:/octen:ro`] : []),
+		`n8nio/n8n:${N8N}`,
+	]);
+	const base = `http://127.0.0.1:${port}`;
+	const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+	let cookie = '';
+	const rest = async (method, path, body) => {
+		const response = await fetch(base + path, {
+			method,
+			headers: { 'content-type': 'application/json', 'browser-id': 'host-test', cookie },
+			body: body === undefined ? undefined : JSON.stringify(body),
+		});
+		const setCookie = response.headers.get('set-cookie');
+		if (setCookie) cookie = setCookie.split(';')[0];
+		return { status: response.status, body: await response.json().catch(() => ({})) };
+	};
+	try {
+		// /healthz/readiness answers before the REST API is up on n8n 1.x, so wait for /rest/settings
+		for (let i = 0; ; i++) {
+			const ready = await fetch(`${base}/rest/settings`).then(
+				(r) => r.ok,
+				() => false,
+			);
+			if (ready) break;
+			if (i > 90) throw new Error('n8n server did not start');
+			await sleep(2000);
+		}
+		// A throwaway owner for this local container only
+		const owner = {
+			email: 'owner@octen-host.test',
+			password: `Host-${process.pid}-${Date.now()}-aA1`,
+		};
+		await rest('POST', '/rest/owner/setup', { ...owner, firstName: 'Host', lastName: 'Test' });
+		await rest('POST', '/rest/login', {
+			emailOrLdapLoginId: owner.email,
+			password: owner.password,
+		});
+		const types = await rest('GET', '/types/nodes.json');
+		const expectedType = LEGACY ? 'CUSTOM.octen' : '@octen.ai/n8n-nodes-octen.octen';
+		const loaded = Array.isArray(types.body) && types.body.some((n) => n.name === expectedType);
+		console.log(
+			`${loaded ? 'PASS' : 'FAIL'} serverLoadsPackage: ${expectedType} ${loaded ? 'loaded' : 'missing'}`,
+		);
+		if (!loaded) failed++;
+		const key = process.env.OCTEN_API_KEY;
+		// n8n 1.x answers a 401 with its own "Authorization failed" message instead of the credential's rule
+		for (const [id, apiKey, expected] of [
+			['credentialValid', key, 'OK'],
+			['credentialPadded', `  ${key}\n`, 'OK'],
+			['credentialWrong', 'your-api-key', 'Error'],
+		]) {
+			const created = await rest('POST', '/rest/credentials', {
+				name: id,
+				type: 'octenApi',
+				data: { apiKey },
+			});
+			const credentialId = created.body?.data?.id;
+			const tested = await rest('POST', '/rest/credentials/test', {
+				credentials: { id: credentialId, name: id, type: 'octenApi', data: { apiKey } },
+			});
+			if (credentialId) await rest('DELETE', `/rest/credentials/${credentialId}`);
+			const result = tested.body?.data ?? {};
+			const ok =
+				result.status === expected &&
+				(expected === 'OK' || /not valid|Authorization failed/.test(result.message ?? ''));
+			if (!ok) failed++;
+			console.log(`${ok ? 'PASS' : 'FAIL'} ${id}: ${result.status} ${result.message ?? ''}`);
+		}
+	} finally {
+		run('docker', ['rm', '-f', container]);
+	}
+}
+
 if (failed === 0) rmSync(work, { recursive: true, force: true });
 console.log(failed === 0 ? 'all cases passed' : `${failed} cases failed; outputs kept in ${io}`);
 process.exit(failed === 0 ? 0 : 1);
