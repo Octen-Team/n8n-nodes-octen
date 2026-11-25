@@ -10,13 +10,12 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { join } from 'node:path';
 
 const args = Object.fromEntries(
-	process.argv
-		.slice(2)
-		.reduce(
-			(pairs, arg, i, all) =>
-				arg.startsWith('--') ? [...pairs, [arg.slice(2), all[i + 1]]] : pairs,
-			[],
-		),
+	process.argv.slice(2).reduce((pairs, arg, i, all) => {
+		if (!arg.startsWith('--')) return pairs;
+		// Both "--only x" and "--only=x"
+		const [name, inline] = arg.slice(2).split(/=(.*)/s);
+		return [...pairs, [name, inline ?? all[i + 1]]];
+	}, []),
 );
 const N8N = args.n8n ?? '2.49.6';
 const MODEL = args.model ?? 'anthropic/claude-haiku-5.5';
@@ -194,17 +193,16 @@ const octen = async (path, body) => {
 	});
 	return (await response.json()).data;
 };
-if ('only' in args && !(args.only ?? '').trim())
-	throw new Error('--only needs a comma-separated list of case names');
-const only =
+const onlyIds =
 	'only' in args
-		? new Set(
-				args.only
-					.split(',')
-					.map((id) => id.trim())
-					.filter(Boolean),
-			)
+		? (args.only ?? '')
+				.split(',')
+				.map((id) => id.trim())
+				.filter(Boolean)
 		: null;
+if (onlyIds && onlyIds.length === 0)
+	throw new Error('--only needs a comma-separated list of case names');
+const only = onlyIds ? new Set(onlyIds) : null;
 const selected = (id) => !only || only.has(id);
 // Filled in below, only for the selected cases, so a bad --only value fails before any paid call
 const imageUrl = '__IMAGE_URL__';
@@ -378,8 +376,7 @@ const CASES = [
 		(items) => {
 			const distances = items.filter((i) => i.type === 'place').map((i) => i.distance);
 			return (
-				distances.some((d) => typeof d === 'number') &&
-				distances.every((d) => typeof d !== 'number' || d <= 2000)
+				distances.length > 0 && distances.every((d) => Number.isInteger(d) && d >= 0 && d <= 2000)
 			);
 		},
 	],
@@ -568,7 +565,7 @@ for (const [wf, check] of cases) {
 		// of a returned place, or for Extract the returned page title.
 		// URLs compare whole: scheme, "www." and a trailing slash are ignored, the host is lower-cased; port, path, query and fragment must match
 		const normalize = (url) => {
-			const text = String(url).replace(/[).,;:!?*\]>"'`]+$/, '');
+			const text = String(url);
 			const withScheme = /^[a-z]+:\/\//i.test(text) ? text : `https://${text}`;
 			try {
 				const u = new URL(withScheme);
@@ -578,7 +575,9 @@ for (const [wf, check] of cases) {
 			}
 		};
 		const answerUrls = new Set(
-			(answer.match(/https?:\/\/[^\s<>()[\]"'`*]+/g) ?? []).map(normalize),
+			(answer.match(/https?:\/\/[^\s<>()[\]"'`*]+/g) ?? [])
+				// Punctuation right after a link in prose is not part of it
+				.map((link) => normalize(link.replace(/[).,;:!?]+$/, ''))),
 		);
 		const promptUrls = new Set((prompt.match(/https?:\/\/[^\s]+/g) ?? []).map(normalize));
 		const cited =

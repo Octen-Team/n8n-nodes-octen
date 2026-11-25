@@ -14,7 +14,7 @@ function splitUrls(value: unknown): string[] {
 	if (Array.isArray(value)) return splitList(value);
 	return String(value ?? '')
 		.split('\n')
-		.flatMap((line) => line.split(/,[ \t]+/))
+		.flatMap((line) => line.trim().split(/,[ \t]+/))
 		.map((url) => url.trim())
 		.filter((url) => url !== '');
 }
