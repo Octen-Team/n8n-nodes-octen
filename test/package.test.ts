@@ -5,8 +5,10 @@ import { describe, expect, it } from 'vitest';
 const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
 
 describe('package.json', () => {
-	it('uses a scoped n8n community node name', () => {
-		expect(pkg.name).toMatch(/^@[a-z0-9.-]+\/n8n-nodes-[a-z0-9-]+$/);
+	it('uses an n8n community node name without a dot in the package part', () => {
+		// n8n splits a node type such as "<package>.octen" at the first dot, so the package name must not contain one
+		expect(pkg.name).toBe('n8n-nodes-octen-official');
+		expect(pkg.name).not.toContain('.');
 	});
 
 	it('declares the community node keyword', () => {

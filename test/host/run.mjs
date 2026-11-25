@@ -3,8 +3,8 @@
 // Usage: OCTEN_API_KEY=... node test/host/run.mjs [--n8n 2.49.6] [--model anthropic/claude-haiku-5.5] [--only case1,case2]
 //
 // Needs Docker. The key reaches the container only as an environment variable; credentials reference it as an expression.
-// The n8n CLI does not load installed community packages, so the packed files are loaded as a custom extension
-// (node type CUSTOM.octen). The code that runs is the same as in the published package.
+// The packed package is installed the way n8n installs community packages, and the workflows use its real
+// node types (n8n-nodes-octen-official.octen and .octenTool).
 import { execFileSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -31,6 +31,7 @@ const run = (cmd, argv, opts = {}) =>
 mkdirSync(join(root, '.host-test'), { recursive: true });
 const work = mkdtempSync(join(root, '.host-test', 'run-'));
 const io = join(work, 'io');
+const PACKAGE = 'n8n-nodes-octen-official';
 const pkgDir = join(work, 'package');
 mkdirSync(io);
 mkdirSync(pkgDir);
@@ -40,6 +41,22 @@ const tarball = run('npm', ['pack', '--silent', '--pack-destination', work], { c
 	.split('\n')
 	.pop();
 run('tar', ['-xzf', join(work, tarball), '-C', pkgDir, '--strip-components=1']);
+
+/** An n8n user folder with the package installed as a community package */
+const installInto = (userFolder) => {
+	const nodesDir = join(userFolder, 'nodes');
+	mkdirSync(join(nodesDir, 'node_modules'), { recursive: true });
+	run('cp', ['-R', pkgDir, join(nodesDir, 'node_modules', PACKAGE)]);
+	writeFileSync(
+		join(nodesDir, 'package.json'),
+		JSON.stringify({
+			name: 'installed-nodes',
+			private: true,
+			dependencies: { [PACKAGE]: '0.1.0' },
+		}),
+	);
+};
+installInto(join(work, 'n8n'));
 
 const KEY = '={{ $env.OCTEN_API_KEY }}';
 const credentials = [
@@ -66,7 +83,7 @@ const credentials = [
 const cred = (id = 'octen0000000001') => ({
 	octenApi: { id, name: credentials.find((c) => c.id === id).name },
 });
-const NODE = 'CUSTOM.octen';
+const NODE = `${PACKAGE}.octen`;
 
 const start = {
 	id: 'start',
@@ -427,7 +444,7 @@ const CASES = [
 		['designSearch', 'Find a design of a SaaS pricing page. Search once, then give the image URL.'],
 		[
 			'extract',
-			'Read https://www.rust-lang.org/ with the tool, then say in one sentence what the page offers and give its URL.',
+			'Read https://www.rust-lang.org/ with the tool, then reply with the page title exactly as the tool returned it.',
 		],
 	].map(([operation, prompt]) => [
 		agentCase(
@@ -467,11 +484,9 @@ run(
 		'-e',
 		'N8N_DIAGNOSTICS_ENABLED=false',
 		'-e',
-		'N8N_CUSTOM_EXTENSIONS=/octen',
-		'-e',
 		'N8N_COMMUNITY_PACKAGES_ALLOW_TOOL_USAGE=true',
 		'-v',
-		`${pkgDir}:/octen:ro`,
+		`${join(work, 'n8n')}:/home/node/.n8n`,
 		'-v',
 		`${io}:/io`,
 		'--entrypoint',
@@ -521,14 +536,23 @@ for (const [wf, check] of cases) {
 				? toolItems.filter((i) => i.status === 'success').map((i) => i.title)
 				: toolItems.flatMap((i) => [i.url, i.title, i.name, i.website]);
 		const delivered = evidence.filter(Boolean).some((v) => observed.includes(String(v)));
-		// And the answer must cite a source the tool returned that the prompt did not already contain
-		const hosts = toolItems
-			.flatMap((i) => [i.url, i.website, i.source_page])
-			.filter(Boolean)
-			.map(hostOf)
-			.filter((host) => host && !prompt.includes(host));
+		// And the answer must use what the tool returned: a returned URL that the prompt did not contain, the name
+		// of a returned place, or for Extract the returned page title.
+		const bare = (url) =>
+			String(url)
+				.replace(/^[a-z]+:\/\//i, '')
+				.replace(/^www\./, '')
+				.replace(/\/+$/, '');
+		const answerBare = bare(answer.toLowerCase());
 		const cited =
-			wf.id === 'agent_extract' ? answer.length > 0 : hosts.some((host) => answer.includes(host));
+			wf.id === 'agent_extract'
+				? toolItems.some((i) => i.status === 'success' && i.title && answer.includes(i.title))
+				: wf.id === 'agent_placeSearch'
+					? toolItems.some((i) => i.name && answer.includes(i.name))
+					: toolItems
+							.flatMap((i) => [i.url, i.source_page])
+							.filter((url) => url && !prompt.includes(bare(url)))
+							.some((url) => answerBare.includes(bare(url).toLowerCase()));
 		ok = toolRuns.length > 0 && toolItems.length > 0 && delivered && cited;
 		detail = `${toolRuns.length} tool calls, ${toolItems.length} tool items, delivered: ${delivered}, cited: ${cited}, answer: ${answer.slice(0, 160).replace(/\s+/g, ' ')}`;
 	} else {
@@ -549,18 +573,10 @@ for (const [wf, check] of cases) {
 // The credential test only runs in the n8n server, so install the package as a community package there
 // (the way users install it) and test the credential through the REST API.
 {
-	const nodesDir = join(work, 'server', 'nodes');
-	mkdirSync(join(nodesDir, 'node_modules', '@octen.ai'), { recursive: true });
-	run('cp', ['-R', pkgDir, join(nodesDir, 'node_modules', '@octen.ai', 'n8n-nodes-octen')]);
-	writeFileSync(
-		join(nodesDir, 'package.json'),
-		JSON.stringify({
-			name: 'installed-nodes',
-			private: true,
-			dependencies: { '@octen.ai/n8n-nodes-octen': '0.1.0' },
-		}),
-	);
-	run('chmod', ['-R', 'a+rwX', join(work, 'server')]);
+	// This folder ends up holding the real key (encrypted by n8n), so it is always deleted below
+	const serverFolder = join(work, 'server');
+	installInto(serverFolder);
+	run('chmod', ['-R', 'a+rwX', serverFolder]);
 	const port = args.port ?? '5689';
 	const container = `octen-n8n-host-${process.pid}`;
 	run('docker', [
@@ -575,9 +591,7 @@ for (const [wf, check] of cases) {
 		'-e',
 		'N8N_SECURE_COOKIE=false',
 		'-v',
-		`${join(work, 'server')}:/home/node/.n8n`,
-		// n8n 1.x only loads community packages recorded by an npm install, so it also gets the files as a custom extension
-		...(LEGACY ? ['-e', 'N8N_CUSTOM_EXTENSIONS=/octen', '-v', `${pkgDir}:/octen:ro`] : []),
+		`${serverFolder}:/home/node/.n8n`,
 		`n8nio/n8n:${N8N}`,
 	]);
 	const base = `http://127.0.0.1:${port}`;
@@ -615,7 +629,7 @@ for (const [wf, check] of cases) {
 			password: owner.password,
 		});
 		const types = await rest('GET', '/types/nodes.json');
-		const expectedType = LEGACY ? 'CUSTOM.octen' : '@octen.ai/n8n-nodes-octen.octen';
+		const expectedType = NODE;
 		const loaded = Array.isArray(types.body) && types.body.some((n) => n.name === expectedType);
 		console.log(
 			`${loaded ? 'PASS' : 'FAIL'} serverLoadsPackage: ${expectedType} ${loaded ? 'loaded' : 'missing'}`,
@@ -647,6 +661,7 @@ for (const [wf, check] of cases) {
 		}
 	} finally {
 		run('docker', ['rm', '-f', container]);
+		rmSync(serverFolder, { recursive: true, force: true });
 	}
 }
 

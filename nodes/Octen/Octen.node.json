@@ -1,5 +1,5 @@
 {
-	"node": "@octen.ai/n8n-nodes-octen.octen",
+	"node": "n8n-nodes-octen-official.octen",
 	"nodeVersion": "1.0",
 	"codexVersion": "1.0",
 	"categories": ["Data & Storage", "Development"],

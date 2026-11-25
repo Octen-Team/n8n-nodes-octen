@@ -1,5 +1,5 @@
 {
-  "name": "@octen.ai/n8n-nodes-octen",
+  "name": "n8n-nodes-octen-official",
   "version": "0.1.0",
   "description": "n8n community node for the Octen API: web, news, business, place and media search, plus page extraction",
   "license": "MIT",

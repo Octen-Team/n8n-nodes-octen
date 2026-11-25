@@ -9,6 +9,15 @@ function splitList(value: unknown): string[] {
 	return parts.map((part) => String(part).trim()).filter((part) => part !== '');
 }
 
+/** URLs may contain commas, so a comma only separates two URLs when the next one starts with a scheme */
+function splitUrls(value: unknown): string[] {
+	if (Array.isArray(value)) return splitList(value);
+	return String(value ?? '')
+		.split(/\n|,\s*(?=https?:\/\/)/i)
+		.map((url) => url.trim())
+		.filter((url) => url !== '');
+}
+
 function setPath(body: IDataObject, path: string[], value: unknown): void {
 	let target = body;
 	for (const key of path.slice(0, -1)) {
@@ -60,7 +69,7 @@ function primaryBody(
 ): IDataObject {
 	switch (operation) {
 		case 'extract': {
-			const urls = splitList(primary.urls);
+			const urls = splitUrls(primary.urls);
 			if (urls.length === 0) throw new OctenInputError('At least one URL is required');
 			return { urls };
 		}

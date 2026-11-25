@@ -51,7 +51,7 @@
     {
       "id": "6f1d2f4e-1a0b-4c3d-8e9f-000000000004",
       "name": "Octen News Search",
-      "type": "@octen.ai/n8n-nodes-octen.octenTool",
+      "type": "n8n-nodes-octen-official.octenTool",
       "typeVersion": 1,
       "position": [
         400,

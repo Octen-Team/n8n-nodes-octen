@@ -1,4 +1,4 @@
-# @octen.ai/n8n-nodes-octen
+# n8n-nodes-octen-official
 
 An [n8n](https://n8n.io/) community node for the [Octen](https://octen.ai) API. Search the web, news, companies, places, images, videos and designs, and extract the content of web pages, in your workflows or as a tool for the n8n AI Agent.
 
@@ -15,7 +15,7 @@ An [n8n](https://n8n.io/) community node for the [Octen](https://octen.ai) API. 
 Installing community nodes requires the instance owner or an admin.
 
 - **From the nodes panel** (n8n Cloud and self-hosted): search for **Octen** and select **Install**. Only nodes verified by n8n appear here.
-- **Self-hosted, from settings**: go to **Settings > Community Nodes**, select **Install**, and enter `@octen.ai/n8n-nodes-octen`.
+- **Self-hosted, from settings**: go to **Settings > Community Nodes**, select **Install**, and enter `n8n-nodes-octen-official`.
 
 See the n8n guide to [installing community nodes](https://docs.n8n.io/integrations/community-nodes/installation/) for details.
 

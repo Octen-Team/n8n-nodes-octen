@@ -201,6 +201,15 @@ describe('buildBody', () => {
 		});
 	});
 
+	it('keeps commas that are part of an Extract URL', () => {
+		expect(buildBody('extract', { urls: 'https://example.com/map?center=47.6062,-122.3321' }, {})).toEqual({
+			urls: ['https://example.com/map?center=47.6062,-122.3321'],
+		});
+		expect(buildBody('extract', { urls: 'https://a.com/x?p=1,2, https://b.com\nhttp://c.com/a,b' }, {})).toEqual({
+			urls: ['https://a.com/x?p=1,2', 'https://b.com', 'http://c.com/a,b'],
+		});
+	});
+
 	it('leaves out the link options while Include Links is off', () => {
 		expect(
 			buildBody(
