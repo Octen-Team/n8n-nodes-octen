@@ -42,7 +42,9 @@
     "credentials": [
       "dist/credentials/OctenApi.credentials.js"
     ],
-    "nodes": []
+    "nodes": [
+      "dist/nodes/Octen/Octen.node.js"
+    ]
   },
   "devDependencies": {
     "@n8n/node-cli": "0.58.6",
