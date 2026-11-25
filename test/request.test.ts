@@ -52,12 +52,18 @@ describe('buildBody', () => {
 
 	it('sends a start and end time as given', () => {
 		expect(
-			buildBody('search', { query: 'q' }, { startTime: '2026-01-01T00:00:00Z', endTime: '2026-02-01T00:00:00Z' }),
+			buildBody(
+				'search',
+				{ query: 'q' },
+				{ startTime: '2026-01-01T00:00:00Z', endTime: '2026-02-01T00:00:00Z' },
+			),
 		).toEqual({ query: 'q', start_time: '2026-01-01T00:00:00Z', end_time: '2026-02-01T00:00:00Z' });
 	});
 
 	it('nests Broad Search options under search_options', () => {
-		expect(buildBody('broadSearch', { query: 'q' }, { maxQueries: 8, count: 3, language: ['en'] })).toEqual({
+		expect(
+			buildBody('broadSearch', { query: 'q' }, { maxQueries: 8, count: 3, language: ['en'] }),
+		).toEqual({
 			query: 'q',
 			max_queries: 8,
 			search_options: { count: 3, language: ['en'] },
@@ -65,7 +71,9 @@ describe('buildBody', () => {
 	});
 
 	it('maps the news subject options', () => {
-		expect(buildBody('newsSearch', { query: 'q' }, { subjects: true, subjectCount: 3, maxSubNews: 10 })).toEqual({
+		expect(
+			buildBody('newsSearch', { query: 'q' }, { subjects: true, subjectCount: 3, maxSubNews: 10 }),
+		).toEqual({
 			query: 'q',
 			subjects: { enable: true, count: 3, max_sub_news: 10 },
 		});
@@ -73,8 +81,15 @@ describe('buildBody', () => {
 
 	it('maps the business entity options', () => {
 		expect(
-			buildBody('businessSearch', { query: 'q' }, { entities: false, entityCount: 4, maxActivities: 6, maxNews: 7 }),
-		).toEqual({ query: 'q', entities: { enable: false, count: 4, max_activities: 6, max_news: 7 } });
+			buildBody(
+				'businessSearch',
+				{ query: 'q' },
+				{ entities: false, entityCount: 4, maxActivities: 6, maxNews: 7 },
+			),
+		).toEqual({
+			query: 'q',
+			entities: { enable: false, count: 4, max_activities: 6, max_news: 7 },
+		});
 	});
 
 	it('maps the Pulse Search options', () => {
@@ -113,11 +128,15 @@ describe('buildBody', () => {
 	});
 
 	it('builds the Image Search input from text or an image URL', () => {
-		expect(buildBody('imageSearch', { inputType: 'text', query: 'red sofa' }, { count: 3 })).toEqual({
+		expect(
+			buildBody('imageSearch', { inputType: 'text', query: 'red sofa' }, { count: 3 }),
+		).toEqual({
 			inputs: [{ type: 'text', data: 'red sofa' }],
 			count: 3,
 		});
-		expect(buildBody('imageSearch', { inputType: 'image', imageUrl: 'https://x.com/a.png' }, {})).toEqual({
+		expect(
+			buildBody('imageSearch', { inputType: 'image', imageUrl: 'https://x.com/a.png' }, {}),
+		).toEqual({
 			inputs: [{ type: 'image', url: 'https://x.com/a.png' }],
 		});
 	});
@@ -134,17 +153,31 @@ describe('buildBody', () => {
 			buildBody(
 				'designSearch',
 				{ query: 'pricing page' },
-				{ imageCount: 6, designFacts: false, snippet: true, snippetMaxTokens: 800, groupId: 'g1', webResults: false },
+				{
+					imageCount: 6,
+					designFacts: false,
+					snippet: true,
+					snippetMaxTokens: 800,
+					groupId: 'g1',
+					webResults: false,
+				},
 			),
 		).toEqual({
 			query: 'pricing page',
-			images: { count: 6, design_facts: false, snippet: { enable: true, max_tokens: 800 }, group_id: 'g1' },
+			images: {
+				count: 6,
+				design_facts: false,
+				snippet: { enable: true, max_tokens: 800 },
+				group_id: 'g1',
+			},
 			web_search: { enable: false },
 		});
 	});
 
 	it('allows Design Search without a query when a group ID is set', () => {
-		expect(buildBody('designSearch', { query: '' }, { groupId: 'g1' })).toEqual({ images: { group_id: 'g1' } });
+		expect(buildBody('designSearch', { query: '' }, { groupId: 'g1' })).toEqual({
+			images: { group_id: 'g1' },
+		});
 	});
 
 	it('splits Extract URLs on commas and new lines', () => {
@@ -152,7 +185,13 @@ describe('buildBody', () => {
 			buildBody(
 				'extract',
 				{ urls: 'https://a.com, https://b.com\nhttps://c.com' },
-				{ mode: 'auto', query: 'pricing', includeLinks: true, linkScope: 'prefer_external', maxLinks: 50 },
+				{
+					mode: 'auto',
+					query: 'pricing',
+					includeLinks: true,
+					linkScope: 'prefer_external',
+					maxLinks: 50,
+				},
 			),
 		).toEqual({
 			urls: ['https://a.com', 'https://b.com', 'https://c.com'],
@@ -163,10 +202,18 @@ describe('buildBody', () => {
 	});
 
 	it('leaves out the link options while Include Links is off', () => {
-		expect(buildBody('extract', { urls: 'https://a.com' }, { linkScope: 'prefer_external', maxLinks: 5 })).toEqual({
+		expect(
+			buildBody(
+				'extract',
+				{ urls: 'https://a.com' },
+				{ linkScope: 'prefer_external', maxLinks: 5 },
+			),
+		).toEqual({
 			urls: ['https://a.com'],
 		});
-		expect(buildBody('extract', { urls: 'https://a.com' }, { includeLinks: false, maxLinks: 5 })).toEqual({
+		expect(
+			buildBody('extract', { urls: 'https://a.com' }, { includeLinks: false, maxLinks: 5 }),
+		).toEqual({
 			urls: ['https://a.com'],
 		});
 		expect(buildBody('extract', { urls: 'https://a.com' }, { includeLinks: true })).toEqual({
@@ -176,7 +223,9 @@ describe('buildBody', () => {
 	});
 
 	it('drops empty strings and empty lists', () => {
-		expect(buildBody('search', { query: 'q' }, { includeDomains: ' , ', timeRange: '', language: [] })).toEqual({
+		expect(
+			buildBody('search', { query: 'q' }, { includeDomains: ' , ', timeRange: '', language: [] }),
+		).toEqual({
 			query: 'q',
 		});
 	});

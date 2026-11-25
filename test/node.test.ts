@@ -10,12 +10,17 @@ interface Call {
 	timeout?: number;
 }
 
-function context(itemParams: Params[], responses: Array<{ statusCode: number; body: unknown }>, continueOnFail = false) {
+function context(
+	itemParams: Params[],
+	responses: Array<{ statusCode: number; body: unknown }>,
+	continueOnFail = false,
+) {
 	const calls: Call[] = [];
 	const ctx = {
 		getInputData: () => itemParams.map(() => ({ json: {} })),
 		getCredentials: async () => ({ apiKey: 'your-api-key', baseUrl: 'https://api.octen.ai' }),
-		getNodeParameter: (name: string, index: number, fallback?: unknown) => itemParams[index][name] ?? fallback,
+		getNodeParameter: (name: string, index: number, fallback?: unknown) =>
+			itemParams[index][name] ?? fallback,
 		getNode: () => ({ name: 'Octen', type: 'octen', typeVersion: 1, parameters: {} }),
 		continueOnFail: () => continueOnFail,
 		helpers: {
@@ -47,8 +52,18 @@ describe('Octen node', () => {
 		);
 		const [out] = await new Octen().execute.call(ctx as any);
 		expect(calls).toEqual([
-			{ credential: 'octenApi', url: 'https://api.octen.ai/search', body: { query: 'a' }, timeout: undefined },
-			{ credential: 'octenApi', url: 'https://api.octen.ai/news-search', body: { query: 'b', count: 2 }, timeout: undefined },
+			{
+				credential: 'octenApi',
+				url: 'https://api.octen.ai/search',
+				body: { query: 'a' },
+				timeout: undefined,
+			},
+			{
+				credential: 'octenApi',
+				url: 'https://api.octen.ai/news-search',
+				body: { query: 'b', count: 2 },
+				timeout: undefined,
+			},
 		]);
 		expect(out.map((item) => item.pairedItem)).toEqual([{ item: 0 }, { item: 1 }, { item: 1 }]);
 		expect(out[0].json).toEqual({ type: 'web', title: 'T', url: 'https://u' });
@@ -76,7 +91,10 @@ describe('Octen node', () => {
 	});
 
 	it('reports a missing query without calling the API', async () => {
-		const { ctx, calls } = context([{ operation: 'search', query: ' ', options: {}, simplify: true }], []);
+		const { ctx, calls } = context(
+			[{ operation: 'search', query: ' ', options: {}, simplify: true }],
+			[],
+		);
 		const error = await new Octen().execute.call(ctx as any).catch((e) => e);
 		expect(error).toBeInstanceOf(NodeOperationError);
 		expect(calls).toEqual([]);
@@ -88,7 +106,10 @@ describe('Octen node', () => {
 				{ operation: 'search', query: 'a', options: {}, simplify: true },
 				{ operation: 'search', query: 'b', options: {}, simplify: true },
 			],
-			[success([result]), { statusCode: 401, body: { code: 401, msg: 'Invalid API Key.', request_id: 'r2' } }],
+			[
+				success([result]),
+				{ statusCode: 401, body: { code: 401, msg: 'Invalid API Key.', request_id: 'r2' } },
+			],
 			true,
 		);
 		const [out] = await new Octen().execute.call(ctx as any);

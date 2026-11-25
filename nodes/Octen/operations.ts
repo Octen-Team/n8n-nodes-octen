@@ -11,7 +11,14 @@ export type OctenOperation =
 	| 'designSearch'
 	| 'extract';
 
-export type OptionKind = 'string' | 'number' | 'boolean' | 'options' | 'multiOptions' | 'list' | 'dateTime';
+export type OptionKind =
+	| 'string'
+	| 'number'
+	| 'boolean'
+	| 'options'
+	| 'multiOptions'
+	| 'list'
+	| 'dateTime';
 
 export interface OptionSpec {
 	name: string;
@@ -62,10 +69,19 @@ const LANGUAGES: Array<[string, string]> = [
 	['Vietnamese', 'vi'],
 ];
 
-const choices = (...values: Array<[string, string]>) => values.map(([name, value]) => ({ name, value }));
+const choices = (...values: Array<[string, string]>) =>
+	values.map(([name, value]) => ({ name, value }));
 
-const count = (path: string[], max: number, displayName = 'Count', what = 'results'): OptionSpec => ({
-	name: displayName === 'Count' ? 'count' : displayName.replace(/\s+/g, '').replace(/^./, (c) => c.toLowerCase()),
+const count = (
+	path: string[],
+	max: number,
+	displayName = 'Count',
+	what = 'results',
+): OptionSpec => ({
+	name:
+		displayName === 'Count'
+			? 'count'
+			: displayName.replace(/\s+/g, '').replace(/^./, (c) => c.toLowerCase()),
 	displayName,
 	path,
 	kind: 'number',
@@ -119,7 +135,13 @@ const timeRange = (path: string[], basis: string): OptionSpec => ({
 	path,
 	kind: 'options',
 	default: '',
-	options: choices(['Any Time', ''], ['Past Day', 'day'], ['Past Week', 'week'], ['Past Month', 'month'], ['Past Year', 'year']),
+	options: choices(
+		['Any Time', ''],
+		['Past Day', 'day'],
+		['Past Week', 'week'],
+		['Past Month', 'month'],
+		['Past Year', 'year'],
+	),
 	description: `Only return results from this window, counted back from now by ${basis}. Do not combine with a start or end time.`,
 });
 
@@ -149,7 +171,11 @@ const timeOptions = (prefix: string[]): OptionSpec[] => [
 		path: [...prefix, 'time_basis'],
 		kind: 'options',
 		default: 'auto',
-		options: choices(['Auto', 'auto'], ['Published Time', 'published'], ['Crawled Time', 'crawled']),
+		options: choices(
+			['Auto', 'auto'],
+			['Published Time', 'published'],
+			['Crawled Time', 'crawled'],
+		),
 		description: 'Which time the time filters use',
 	},
 	timeRange([...prefix, 'time_range'], 'the time basis'),
@@ -280,6 +306,14 @@ const newsOrBusinessBase = (): OptionSpec[] => [
 	...contentOptions([]),
 ];
 
+/** Adds a note to the descriptions of some options, for limits that only apply to one operation */
+const withNote = (options: OptionSpec[], names: string[], note: string): OptionSpec[] =>
+	options.map((option) =>
+		names.includes(option.name)
+			? { ...option, description: `${option.description.replace(/\.$/, '')}. ${note}` }
+			: option,
+	);
+
 export const OPERATIONS: OperationSpec[] = [
 	{
 		value: 'search',
@@ -301,7 +335,8 @@ export const OPERATIONS: OperationSpec[] = [
 		value: 'broadSearch',
 		name: 'Broad Search',
 		action: 'Search the web with several sub-queries',
-		description: 'Split the query into sub-queries, search each one and return the results by sub-query',
+		description:
+			'Split the query into sub-queries, search each one and return the results by sub-query',
 		endpoint: '/broad-search',
 		timeoutMs: 120_000,
 		options: [
@@ -325,7 +360,11 @@ export const OPERATIONS: OperationSpec[] = [
 		description: 'Search recent news articles, grouped into subjects',
 		endpoint: '/news-search',
 		options: [
-			...newsOrBusinessBase(),
+			...withNote(
+				newsOrBusinessBase(),
+				['includeDomains', 'excludeDomains'],
+				'Applies to the articles, not to the subjects',
+			),
 			{
 				name: 'subjects',
 				displayName: 'Subjects',
@@ -354,7 +393,11 @@ export const OPERATIONS: OperationSpec[] = [
 		description: 'Search the web about companies and people, with entity cards',
 		endpoint: '/business-search',
 		options: [
-			...newsOrBusinessBase(),
+			...withNote(
+				newsOrBusinessBase(),
+				['language'],
+				'Applies to the web results, not to the entity cards',
+			),
 			{
 				name: 'entities',
 				displayName: 'Entity Cards',
@@ -400,12 +443,16 @@ export const OPERATIONS: OperationSpec[] = [
 				kind: 'options',
 				default: 'lite',
 				options: choices(['Lite', 'lite'], ['Standard', 'standard']),
-				description: 'Lite returns the title and URL of each result. Standard also returns highlights, full text and images.',
+				description:
+					'Lite returns the title and URL of each result. Standard also returns highlights, full text and images.',
 			},
 			count(['count'], 10),
-			...contentOptions([]),
+			...withNote(
+				[...contentOptions([]), includeImages(['include_images'])],
+				['highlight', 'highlightMaxTokens', 'fullContent', 'fullContentMaxTokens', 'includeImages'],
+				'Only applies in Standard mode',
+			),
 			safesearch(['safesearch']),
-			includeImages(['include_images']),
 		],
 	},
 	{
@@ -536,7 +583,8 @@ export const OPERATIONS: OperationSpec[] = [
 				path: ['images', 'group_id'],
 				kind: 'string',
 				default: '',
-				description: 'Return the images of this group, in order, instead of searching. The query is optional when this is set.',
+				description:
+					'Return the images of this group, in order, instead of searching. The query is optional when this is set.',
 			},
 			...webResultOptions(true),
 		],
@@ -555,7 +603,8 @@ export const OPERATIONS: OperationSpec[] = [
 				kind: 'options',
 				default: 'standard',
 				options: choices(['Standard', 'standard'], ['Advanced', 'advanced'], ['Auto', 'auto']),
-				description: 'Standard is fastest. Advanced works better on hard-to-reach pages. Auto picks one per page.',
+				description:
+					'Standard is fastest. Advanced works better on hard-to-reach pages. Auto picks one per page.',
 			},
 			{
 				name: 'query',
@@ -594,7 +643,10 @@ export const OPERATIONS: OperationSpec[] = [
 				max: 60,
 				description: 'How long to try each URL, from 1 to 60 seconds',
 			},
-			{ ...includeImages(['include_images']), description: 'Whether to return the image URLs found on the page' },
+			{
+				...includeImages(['include_images']),
+				description: 'Whether to return the image URLs found on the page',
+			},
 			{
 				name: 'includeVideos',
 				displayName: 'Include Videos',
@@ -626,7 +678,10 @@ export const OPERATIONS: OperationSpec[] = [
 				path: ['include_links', 'scope'],
 				kind: 'options',
 				default: 'prefer_internal',
-				options: choices(['Prefer Internal', 'prefer_internal'], ['Prefer External', 'prefer_external']),
+				options: choices(
+					['Prefer Internal', 'prefer_internal'],
+					['Prefer External', 'prefer_external'],
+				),
 				description: 'Which links to list first when Include Links is on',
 			},
 			{

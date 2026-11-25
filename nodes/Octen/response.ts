@@ -31,7 +31,10 @@ export function assertOk(httpCode: number, body: unknown): asserts body is IData
 		);
 	}
 	if (okStatus && body.code === 0) return;
-	const message = typeof body.msg === 'string' && body.msg !== '' ? body.msg : `The Octen API answered code ${body.code}`;
+	const message =
+		typeof body.msg === 'string' && body.msg !== ''
+			? body.msg
+			: `The Octen API answered code ${body.code}`;
 	const requestId = typeof body.request_id === 'string' ? body.request_id : undefined;
 	throw new OctenResponseError(message, httpCode, requestId, body.code);
 }
@@ -45,19 +48,32 @@ function pick(source: IDataObject, keys: string[]): IDataObject {
 	return out;
 }
 
-const list = (value: unknown): IDataObject[] => (Array.isArray(value) ? value.filter(isObject) : []);
+const list = (value: unknown): IDataObject[] =>
+	Array.isArray(value) ? value.filter(isObject) : [];
 
 const web = (result: IDataObject): IDataObject => ({
 	type: 'web',
-	// full_content and images are only returned when the user turns them on, so keep them when present
-	...pick(result, ['title', 'url', 'highlight', 'full_content', 'time_published', 'images']),
+	// Content the user can turn on (full content, images) is kept whenever the API returns it
+	...pick(result, [
+		'title',
+		'url',
+		'highlight',
+		'full_content',
+		'time_published',
+		'cover_image',
+		'images',
+	]),
 });
 
 /**
  * Turns a successful response into n8n items. With simplify off, the whole response is one item.
  * With simplify on, each result is one item with a `type`, keeping the fields most workflows use.
  */
-export function toItems(operation: OctenOperation, body: IDataObject, simplify: boolean): IDataObject[] {
+export function toItems(
+	operation: OctenOperation,
+	body: IDataObject,
+	simplify: boolean,
+): IDataObject[] {
 	if (!simplify) return [body];
 	const data = isObject(body.data) ? body.data : {};
 	const results = list(data.results);
@@ -70,13 +86,17 @@ export function toItems(operation: OctenOperation, body: IDataObject, simplify: 
 			return [
 				...list(data.subjects).map((subject) => ({
 					type: 'subject',
-					...pick(subject, ['name', 'summary', 'time_latest', 'top_news']),
+					...pick(subject, ['name', 'summary', 'time_latest', 'top_news', 'sub_news']),
 				})),
 				...results.map(web),
 			];
 		case 'businessSearch':
 			return [
-				...list(data.entities).map((entity) => ({ ...entity, type: 'entity', entity_type: entity.type })),
+				...list(data.entities).map((entity) => ({
+					...entity,
+					type: 'entity',
+					entity_type: entity.type,
+				})),
 				...results.map(web),
 			];
 		case 'placeSearch':
@@ -100,7 +120,10 @@ export function toItems(operation: OctenOperation, body: IDataObject, simplify: 
 				...results.map(web),
 			];
 		case 'imageSearch':
-			return results.map((r) => ({ type: 'image', ...pick(r, ['title', 'url', 'source_page', 'width', 'height']) }));
+			return results.map((r) => ({
+				type: 'image',
+				...pick(r, ['title', 'url', 'source_page', 'width', 'height']),
+			}));
 		case 'videoSearch':
 			return results.map((r) => ({
 				type: 'video',
@@ -111,7 +134,17 @@ export function toItems(operation: OctenOperation, body: IDataObject, simplify: 
 				...list(data.images).map((image) => ({
 					type: 'design',
 					image_type: image.type,
-					...pick(image, ['title', 'url', 'source_page', 'width', 'height', 'design_facts', 'snippet']),
+					// group carries the group_id that a follow-up Design Search takes
+					...pick(image, [
+						'title',
+						'url',
+						'source_page',
+						'width',
+						'height',
+						'group',
+						'design_facts',
+						'snippet',
+					]),
 				})),
 				...results.map(web),
 			];
@@ -127,6 +160,7 @@ export function toItems(operation: OctenOperation, body: IDataObject, simplify: 
 					'time_published',
 					'error_message',
 					// Only returned when the matching Include option is on
+					'cover_image',
 					'images',
 					'videos',
 					'audio',

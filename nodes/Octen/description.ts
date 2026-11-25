@@ -34,7 +34,8 @@ function optionProperty(option: OptionSpec): INodeProperties {
 		default: option.default,
 		description: option.description,
 	};
-	if (option.options) property.options = [...option.options].sort((a, b) => a.name.localeCompare(b.name));
+	if (option.options)
+		property.options = [...option.options].sort((a, b) => a.name.localeCompare(b.name));
 	if (option.kind === 'number') {
 		property.typeOptions = {
 			...(option.min !== undefined && { minValue: option.min }),
@@ -52,9 +53,12 @@ export const properties: INodeProperties[] = [
 		type: 'options',
 		noDataExpression: true,
 		default: 'search',
-		options: OPERATIONS.map((o) => ({ name: o.name, value: o.value, action: o.action, description: o.description })).sort(
-			(a, b) => a.name.localeCompare(b.name),
-		),
+		options: OPERATIONS.map((o) => ({
+			name: o.name,
+			value: o.value,
+			action: o.action,
+			description: o.description,
+		})).sort((a, b) => a.name.localeCompare(b.name)),
 	},
 	{
 		displayName: 'Query',
@@ -122,7 +126,8 @@ export const properties: INodeProperties[] = [
 		name: 'simplify',
 		type: 'boolean',
 		default: true,
-		description: 'Whether to return one item per result with the main fields, instead of the full API response',
+		description:
+			'Whether to return one item per result with the main fields, instead of the full API response',
 	},
 	...OPERATIONS.map(
 		(operation): INodeProperties => ({
@@ -131,7 +136,9 @@ export const properties: INodeProperties[] = [
 			type: 'collection',
 			placeholder: 'Add Option',
 			default: {},
-			options: operation.options.map(optionProperty).sort((a, b) => a.displayName.localeCompare(b.displayName)),
+			options: operation.options
+				.map(optionProperty)
+				.sort((a, b) => a.displayName.localeCompare(b.displayName)),
 			...show([operation.value]),
 		}),
 	),

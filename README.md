@@ -51,15 +51,15 @@ Each operation has an **Options** list with the filters its API takes, such as r
 | `type` | Comes from | Main fields |
 | --- | --- | --- |
 | `web` | Search results of every search operation | `title`, `url`, `highlight`, `time_published` |
-| `subject` | News Search | `name`, `summary`, `time_latest`, `top_news` |
+| `subject` | News Search | `name`, `summary`, `time_latest`, `top_news`, `sub_news` |
 | `entity` | Business Search | The full entity card, with `entity_type` (`company` or `person`) |
 | `place` | Place Search | `name`, `address`, `rating`, `review_count`, `distance`, `phone`, `website` |
 | `image` | Image Search | `title`, `url`, `source_page`, `width`, `height` |
 | `video` | Video Search | `title`, `url`, `source_page`, `duration_seconds` |
-| `design` | Design Search | `title`, `url`, `source_page`, `design_facts`, `snippet` |
+| `design` | Design Search | `title`, `url`, `source_page`, `group` (its `group_id` works as the **Group ID** option), `design_facts`, `snippet` |
 | `page` | Extract | `url`, `status`, `title`, `full_content` or `highlights` |
 
-Content you ask for in the options, such as full page content, images or links, is kept. Turn **Simplify** off to get the full API response as a single item. When a search finds nothing, the node outputs no items.
+Content you turn on in the options, such as full page content, images or links, is kept. Turn **Simplify** off to get the full API response as a single item. When a search finds nothing, the node outputs no items.
 
 Each input item runs one request. To keep the workflow going when a request fails, set the node's **On Error** setting to continue; the failed item then outputs `{ "error": "<message>" }`.
 

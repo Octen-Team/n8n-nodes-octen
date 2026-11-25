@@ -25,7 +25,8 @@ export class Octen implements INodeType {
 		group: ['transform'],
 		version: 1,
 		subtitle: '={{ $parameter["operation"] }}',
-		description: 'Search the web, news, companies, places, images, videos and designs, and extract page content with Octen',
+		description:
+			'Search the web, news, companies, places, images, videos and designs, and extract page content with Octen',
 		defaults: { name: 'Octen' },
 		usableAsTool: true,
 		inputs: [NodeConnectionTypes.Main],
@@ -45,7 +46,8 @@ export class Octen implements INodeType {
 				const operation = this.getNodeParameter('operation', itemIndex) as OctenOperation;
 				const spec = getOperation(operation);
 				const primary: IDataObject = {};
-				for (const name of PRIMARY_PARAMETERS) primary[name] = this.getNodeParameter(name, itemIndex, '');
+				for (const name of PRIMARY_PARAMETERS)
+					primary[name] = this.getNodeParameter(name, itemIndex, '');
 				const options = this.getNodeParameter('options', itemIndex, {}) as IDataObject;
 				const simplify = this.getNodeParameter('simplify', itemIndex, true) as boolean;
 
@@ -58,7 +60,11 @@ export class Octen implements INodeType {
 					ignoreHttpStatusErrors: true,
 					...(spec.timeoutMs !== undefined && { timeout: spec.timeoutMs }),
 				};
-				const response = await this.helpers.httpRequestWithAuthentication.call(this, 'octenApi', request);
+				const response = await this.helpers.httpRequestWithAuthentication.call(
+					this,
+					'octenApi',
+					request,
+				);
 				assertOk(response.statusCode, response.body);
 				for (const json of toItems(operation, response.body, simplify)) {
 					output.push({ json, pairedItem: { item: itemIndex } });
@@ -81,12 +87,16 @@ function toNodeError(context: IExecuteFunctions, error: unknown, itemIndex: numb
 		return new NodeOperationError(context.getNode(), error.message, { itemIndex });
 	}
 	if (error instanceof OctenResponseError) {
-		return new NodeApiError(context.getNode(), { message: error.message, code: error.code } as JsonObject, {
-			message: error.message,
-			description: error.requestId ? `Request ID: ${error.requestId}` : undefined,
-			httpCode: String(error.httpCode),
-			itemIndex,
-		});
+		return new NodeApiError(
+			context.getNode(),
+			{ message: error.message, code: error.code } as JsonObject,
+			{
+				message: error.message,
+				description: error.requestId ? `Request ID: ${error.requestId}` : undefined,
+				httpCode: String(error.httpCode),
+				itemIndex,
+			},
+		);
 	}
 	return new NodeOperationError(context.getNode(), error as Error, { itemIndex });
 }

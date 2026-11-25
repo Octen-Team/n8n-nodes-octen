@@ -10,7 +10,13 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { join } from 'node:path';
 
 const args = Object.fromEntries(
-	process.argv.slice(2).reduce((pairs, arg, i, all) => (arg.startsWith('--') ? [...pairs, [arg.slice(2), all[i + 1]]] : pairs), []),
+	process.argv
+		.slice(2)
+		.reduce(
+			(pairs, arg, i, all) =>
+				arg.startsWith('--') ? [...pairs, [arg.slice(2), all[i + 1]]] : pairs,
+			[],
+		),
 );
 const N8N = args.n8n ?? '2.49.6';
 const MODEL = args.model ?? 'anthropic/claude-haiku-5.5';
@@ -18,7 +24,8 @@ const LEGACY = Number(N8N.split('.')[0]) < 2;
 if (!process.env.OCTEN_API_KEY) throw new Error('Set OCTEN_API_KEY');
 
 const root = new URL('../..', import.meta.url).pathname;
-const run = (cmd, argv, opts = {}) => execFileSync(cmd, argv, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], ...opts });
+const run = (cmd, argv, opts = {}) =>
+	execFileSync(cmd, argv, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], ...opts });
 
 // Under the repository, because Docker on macOS (colima) only shares the home directory with containers.
 mkdirSync(join(root, '.host-test'), { recursive: true });
@@ -28,31 +35,83 @@ const pkgDir = join(work, 'package');
 mkdirSync(io);
 mkdirSync(pkgDir);
 run('npm', ['run', 'build'], { cwd: root });
-const tarball = run('npm', ['pack', '--silent', '--pack-destination', work], { cwd: root }).trim().split('\n').pop();
+const tarball = run('npm', ['pack', '--silent', '--pack-destination', work], { cwd: root })
+	.trim()
+	.split('\n')
+	.pop();
 run('tar', ['-xzf', join(work, tarball), '-C', pkgDir, '--strip-components=1']);
 
 const KEY = '={{ $env.OCTEN_API_KEY }}';
 const credentials = [
 	{ id: 'octen0000000001', name: 'Octen', type: 'octenApi', data: { apiKey: KEY } },
-	{ id: 'octen0000000002', name: 'Octen padded key', type: 'octenApi', data: { apiKey: "={{ '  ' + $env.OCTEN_API_KEY + '\\n' }}" } },
-	{ id: 'octen0000000003', name: 'Octen wrong key', type: 'octenApi', data: { apiKey: 'your-api-key' } },
-	{ id: 'gateway00000001', name: 'Octen model gateway', type: 'openAiApi', data: { apiKey: KEY, url: 'https://api.octen.ai/v1' } },
+	{
+		id: 'octen0000000002',
+		name: 'Octen padded key',
+		type: 'octenApi',
+		data: { apiKey: "={{ '  ' + $env.OCTEN_API_KEY + '\\n' }}" },
+	},
+	{
+		id: 'octen0000000003',
+		name: 'Octen wrong key',
+		type: 'octenApi',
+		data: { apiKey: 'your-api-key' },
+	},
+	{
+		id: 'gateway00000001',
+		name: 'Octen model gateway',
+		type: 'openAiApi',
+		data: { apiKey: KEY, url: 'https://api.octen.ai/v1' },
+	},
 ];
-const cred = (id = 'octen0000000001') => ({ octenApi: { id, name: credentials.find((c) => c.id === id).name } });
+const cred = (id = 'octen0000000001') => ({
+	octenApi: { id, name: credentials.find((c) => c.id === id).name },
+});
 const NODE = 'CUSTOM.octen';
 
-const start = { id: 'start', name: 'Start', type: 'n8n-nodes-base.manualTrigger', typeVersion: 1, position: [0, 0], parameters: {} };
+const start = {
+	id: 'start',
+	name: 'Start',
+	type: 'n8n-nodes-base.manualTrigger',
+	typeVersion: 1,
+	position: [0, 0],
+	parameters: {},
+};
 // executionOrder v1 is what the editor uses for new workflows; without it an AI Agent gets empty tool results.
-const workflow = (id, nodes, connections) => ({ id, name: id, active: false, settings: { executionOrder: 'v1' }, nodes, connections });
+const workflow = (id, nodes, connections) => ({
+	id,
+	name: id,
+	active: false,
+	settings: { executionOrder: 'v1' },
+	nodes,
+	connections,
+});
 const nodeCase = (id, parameters, credential, extra = {}) =>
 	workflow(
 		id,
-		[start, { id: 'octen', name: 'Octen', type: NODE, typeVersion: 1, position: [300, 0], parameters, credentials: cred(credential), ...extra }],
+		[
+			start,
+			{
+				id: 'octen',
+				name: 'Octen',
+				type: NODE,
+				typeVersion: 1,
+				position: [300, 0],
+				parameters,
+				credentials: cred(credential),
+				...extra,
+			},
+		],
 		{ Start: { main: [[{ node: 'Octen', type: 'main', index: 0 }]] } },
 	);
 
-const fromAI = (key, description) => `={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('${key}', \`${description}\`, 'string') }}`;
-const agentCase = (id, operation, prompt, toolParameters = { query: fromAI('query', 'What to search for') }) =>
+const fromAI = (key, description) =>
+	`={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('${key}', \`${description}\`, 'string') }}`;
+const agentCase = (
+	id,
+	operation,
+	prompt,
+	toolParameters = { query: fromAI('query', 'What to search for') },
+) =>
 	workflow(
 		id,
 		[
@@ -63,7 +122,11 @@ const agentCase = (id, operation, prompt, toolParameters = { query: fromAI('quer
 				type: '@n8n/n8n-nodes-langchain.agent',
 				typeVersion: LEGACY ? 2.2 : 3.1,
 				position: [300, 0],
-				parameters: { promptType: 'define', text: prompt, options: { maxIterations: 6 } },
+				parameters: {
+					promptType: 'define',
+					text: prompt,
+					options: { maxIterations: 6, returnIntermediateSteps: true },
+				},
 			},
 			{
 				id: 'model',
@@ -114,61 +177,184 @@ const octen = async (path, body) => {
 	});
 	return (await response.json()).data;
 };
-const imageUrl = (await octen('/image-search', { inputs: [{ type: 'text', data: 'red mid-century sofa' }], count: 1 })).results[0].url;
-const groupId = (await octen('/design-search', { query: 'SaaS pricing page', images: { count: 5 }, web_search: { enable: false } })).images.find(
-	(image) => image.group?.group_id,
-)?.group?.group_id;
-if (!imageUrl || !groupId) throw new Error('Could not get an image URL or a design group ID from the API');
+const only = args.only ? new Set(args.only.split(',')) : null;
+const selected = (id) => !only || only.has(id);
+const imageUrl = selected('imageByUrl')
+	? (
+			await octen('/image-search', {
+				inputs: [{ type: 'text', data: 'red mid-century sofa' }],
+				count: 1,
+			})
+		).results[0].url
+	: 'https://example.com/unused.png';
+const groupId = selected('designGroup')
+	? (
+			await octen('/design-search', {
+				query: 'SaaS pricing page',
+				images: { count: 5 },
+				web_search: { enable: false },
+			})
+		).images.find((image) => image.group?.group_id)?.group?.group_id
+	: 'unused';
+if (!imageUrl || !groupId)
+	throw new Error('Could not get an image URL or a design group ID from the API');
 
 const CASES = [
-	[nodeCase('search', { operation: 'search', query: 'latest Rust release', simplify: true, options: { count: "={{ '3' }}" } }), hasType('web')],
-	[nodeCase('searchPremier', { operation: 'searchPremier', query: 'latest Rust release', simplify: true, options: { count: 3 } }), hasType('web')],
 	[
-		nodeCase('broadSearch', { operation: 'broadSearch', query: 'Rust versus Go for web backends', simplify: true, options: { maxQueries: 2, count: 2 } }),
-		(items) => items.some((i) => i.type === 'web' && i.query),
-	],
-	[nodeCase('newsSearch', { operation: 'newsSearch', query: 'OpenAI', simplify: true, options: { count: 3 } }), hasType('web')],
-	[nodeCase('businessSearch', { operation: 'businessSearch', query: 'Stripe', simplify: true, options: { count: 3 } }), hasType('entity')],
-	[
-		nodeCase('pulseSearch', { operation: 'pulseSearch', query: 'Rust programming language', simplify: true, options: { mode: 'standard', count: 3 } }),
+		nodeCase('search', {
+			operation: 'search',
+			query: 'latest Rust release',
+			simplify: true,
+			options: { count: "={{ '3' }}" },
+		}),
 		hasType('web'),
 	],
 	[
-		nodeCase('placeSearch', { operation: 'placeSearch', query: 'coffee shop', simplify: true, options: { placeCount: 3, city: 'Seattle', country: 'US' } }),
+		nodeCase('searchPremier', {
+			operation: 'searchPremier',
+			query: 'latest Rust release',
+			simplify: true,
+			options: { count: 3 },
+		}),
+		hasType('web'),
+	],
+	[
+		nodeCase('broadSearch', {
+			operation: 'broadSearch',
+			query: 'Rust versus Go for web backends',
+			simplify: true,
+			options: { maxQueries: 2, count: 2 },
+		}),
+		(items) => items.some((i) => i.type === 'web' && i.query),
+	],
+	[
+		nodeCase('newsSearch', {
+			operation: 'newsSearch',
+			query: 'OpenAI',
+			simplify: true,
+			options: { count: 3 },
+		}),
+		(items) =>
+			hasType('web')(items) && items.some((i) => i.type === 'subject' && Array.isArray(i.sub_news)),
+	],
+	[
+		nodeCase('businessSearch', {
+			operation: 'businessSearch',
+			query: 'Stripe',
+			simplify: true,
+			options: { count: 3 },
+		}),
+		hasType('entity'),
+	],
+	[
+		nodeCase('pulseSearch', {
+			operation: 'pulseSearch',
+			query: 'Rust programming language',
+			simplify: true,
+			options: { mode: 'standard', count: 3 },
+		}),
+		hasType('web'),
+	],
+	[
+		nodeCase('placeSearch', {
+			operation: 'placeSearch',
+			query: 'coffee shop',
+			simplify: true,
+			options: { placeCount: 3, city: 'Seattle', country: 'US' },
+		}),
 		hasType('place'),
 	],
 	[
-		nodeCase('imageSearch', { operation: 'imageSearch', inputType: 'text', query: 'red mid-century sofa', simplify: true, options: { count: 3 } }),
+		nodeCase('imageSearch', {
+			operation: 'imageSearch',
+			inputType: 'text',
+			query: 'red mid-century sofa',
+			simplify: true,
+			options: { count: 3 },
+		}),
 		hasType('image'),
 	],
-	[nodeCase('videoSearch', { operation: 'videoSearch', query: 'drone footage of mountains', simplify: true, options: { count: 3 } }), hasType('video')],
 	[
-		nodeCase('designSearch', { operation: 'designSearch', query: 'SaaS pricing page', simplify: true, options: { imageCount: 3, webResults: false } }),
-		hasType('design'),
+		nodeCase('videoSearch', {
+			operation: 'videoSearch',
+			query: 'drone footage of mountains',
+			simplify: true,
+			options: { count: 3 },
+		}),
+		hasType('video'),
 	],
 	[
-		nodeCase('extract', { operation: 'extract', urls: 'https://www.rust-lang.org/, https://blog.rust-lang.org/', simplify: true, options: {} }),
-		(items) => items.length === 2 && items.every((i) => i.type === 'page' && i.status === 'success'),
+		nodeCase('designSearch', {
+			operation: 'designSearch',
+			query: 'SaaS pricing page',
+			simplify: true,
+			options: { imageCount: 3, webResults: false },
+		}),
+		(items) =>
+			hasType('design')(items) && items.some((i) => i.type === 'design' && i.group?.group_id),
 	],
 	[
-		nodeCase('rawResponse', { operation: 'search', query: 'latest Rust release', simplify: false, options: { count: 2 } }),
+		nodeCase('extract', {
+			operation: 'extract',
+			urls: 'https://www.rust-lang.org/, https://blog.rust-lang.org/',
+			simplify: true,
+			options: {},
+		}),
+		(items) =>
+			items.length === 2 && items.every((i) => i.type === 'page' && i.status === 'success'),
+	],
+	[
+		nodeCase('rawResponse', {
+			operation: 'search',
+			query: 'latest Rust release',
+			simplify: false,
+			options: { count: 2 },
+		}),
 		(items) => items.length === 1 && items[0].code === 0 && Array.isArray(items[0].data?.results),
 	],
-	[nodeCase('paddedKey', { operation: 'search', query: 'Rust', simplify: true, options: { count: 1 } }, 'octen0000000002'), hasType('web')],
 	[
-		nodeCase('wrongKey', { operation: 'search', query: 'Rust', simplify: true, options: {} }, 'octen0000000003', { onError: 'continueRegularOutput' }),
+		nodeCase(
+			'paddedKey',
+			{ operation: 'search', query: 'Rust', simplify: true, options: { count: 1 } },
+			'octen0000000002',
+		),
+		hasType('web'),
+	],
+	[
+		nodeCase(
+			'wrongKey',
+			{ operation: 'search', query: 'Rust', simplify: true, options: {} },
+			'octen0000000003',
+			{ onError: 'continueRegularOutput' },
+		),
 		(items) => items.length === 1 && /Invalid API Key/.test(items[0].error ?? ''),
 	],
 	[
-		nodeCase('searchFilters', { operation: 'search', query: 'Rust release notes', simplify: true, options: { includeDomains: 'rust-lang.org', timeRange: 'year', count: 3 } }),
+		nodeCase('searchFilters', {
+			operation: 'search',
+			query: 'Rust release notes',
+			simplify: true,
+			options: { includeDomains: 'rust-lang.org', timeRange: 'year', count: 3 },
+		}),
 		(items) => items.length > 0 && items.every((i) => hostOf(i.url).endsWith('rust-lang.org')),
 	],
 	[
-		nodeCase('searchImages', { operation: 'search', query: 'Rust programming language logo', simplify: true, options: { includeImages: true, count: 3 } }),
+		nodeCase('searchImages', {
+			operation: 'search',
+			query: 'Rust programming language logo',
+			simplify: true,
+			options: { includeImages: true, count: 3 },
+		}),
 		(items) => items.some((i) => Array.isArray(i.images) && i.images.length > 0),
 	],
 	[
-		nodeCase('imageByUrl', { operation: 'imageSearch', inputType: 'image', imageUrl, simplify: true, options: { count: 3 } }),
+		nodeCase('imageByUrl', {
+			operation: 'imageSearch',
+			inputType: 'image',
+			imageUrl,
+			simplify: true,
+			options: { count: 3 },
+		}),
 		hasType('image'),
 	],
 	[
@@ -178,10 +364,17 @@ const CASES = [
 			simplify: true,
 			options: { latitude: 47.6062, longitude: -122.3321, radius: 2000, placeCount: 3 },
 		}),
-		(items) => items.some((i) => i.type === 'place') && items.every((i) => i.type !== 'place' || i.distance === undefined || i.distance <= 2000),
+		(items) =>
+			items.some((i) => i.type === 'place') &&
+			items.every((i) => i.type !== 'place' || i.distance === undefined || i.distance <= 2000),
 	],
 	[
-		nodeCase('designGroup', { operation: 'designSearch', query: '', simplify: true, options: { groupId, webResults: false } }),
+		nodeCase('designGroup', {
+			operation: 'designSearch',
+			query: '',
+			simplify: true,
+			options: { groupId, webResults: false },
+		}),
 		hasType('design'),
 	],
 	[
@@ -191,20 +384,51 @@ const CASES = [
 			simplify: true,
 			options: { includeLinks: true, maxLinks: 5, includeImages: true },
 		}),
-		(items) => items.length === 1 && Array.isArray(items[0].links) && items[0].links.length > 0 && items[0].links.length <= 5,
+		(items) =>
+			items.length === 1 &&
+			Array.isArray(items[0].links) &&
+			items[0].links.length > 0 &&
+			items[0].links.length <= 5,
 	],
 	...[
-		['search', 'Find the official Rust programming language website. Search once, then answer with its URL.'],
-		['searchPremier', 'Find the release announcement of Rust 1.100. Search once, then answer in one sentence with the source URL.'],
-		['broadSearch', 'Compare Rust and Go for web backends. Search once, then answer in two sentences with source URLs.'],
-		['newsSearch', 'What is new with the Rust programming language? Search once, then answer in two sentences with source URLs.'],
-		['businessSearch', 'Who founded Stripe and when? Search once, then answer in one sentence with a source URL.'],
-		['pulseSearch', 'Find the official Rust programming language website. Search once, then answer with its URL.'],
+		[
+			'search',
+			'Find the official Rust programming language website. Search once, then answer with its URL.',
+		],
+		[
+			'searchPremier',
+			'Find the release announcement of Rust 1.100. Search once, then answer in one sentence with the source URL.',
+		],
+		[
+			'broadSearch',
+			'Compare Rust and Go for web backends. Search once, then answer in two sentences with source URLs.',
+		],
+		[
+			'newsSearch',
+			'What is new with the Rust programming language? Search once, then answer in two sentences with source URLs.',
+		],
+		[
+			'businessSearch',
+			'Who founded Stripe and when? Search once, then answer in one sentence with a source URL.',
+		],
+		[
+			'pulseSearch',
+			'Find the official Rust programming language website. Search once, then answer with its URL.',
+		],
 		['placeSearch', 'Find a coffee shop in Seattle. Search once, then give its name and website.'],
-		['imageSearch', 'Find an image of a red mid-century sofa. Search once, then give the image URL.'],
-		['videoSearch', 'Find a video of drone footage over mountains. Search once, then give the video URL.'],
+		[
+			'imageSearch',
+			'Find an image of a red mid-century sofa. Search once, then give the image URL.',
+		],
+		[
+			'videoSearch',
+			'Find a video of drone footage over mountains. Search once, then give the video URL.',
+		],
 		['designSearch', 'Find a design of a SaaS pricing page. Search once, then give the image URL.'],
-		['extract', 'Read https://www.rust-lang.org/ with the tool, then say in one sentence what the page offers and give its URL.'],
+		[
+			'extract',
+			'Read https://www.rust-lang.org/ with the tool, then say in one sentence what the page offers and give its URL.',
+		],
 	].map(([operation, prompt]) => [
 		agentCase(
 			`agent_${operation}`,
@@ -219,8 +443,7 @@ const CASES = [
 		'agent',
 	]),
 ];
-const only = args.only ? new Set(args.only.split(',')) : null;
-const cases = CASES.filter(([wf]) => !only || only.has(wf.id));
+const cases = CASES.filter(([wf]) => selected(wf.id));
 writeFileSync(join(io, 'credentials.json'), JSON.stringify(credentials));
 writeFileSync(join(io, 'workflows.json'), JSON.stringify(cases.map(([wf]) => wf)));
 run('chmod', ['-R', 'a+rwX', work]);
@@ -235,11 +458,27 @@ const started = Date.now();
 run(
 	'docker',
 	[
-		'run', '--rm',
-		'-e', 'OCTEN_API_KEY', '-e', 'N8N_BLOCK_ENV_ACCESS_IN_NODE=false', '-e', 'N8N_DIAGNOSTICS_ENABLED=false',
-		'-e', 'N8N_CUSTOM_EXTENSIONS=/octen', '-e', 'N8N_COMMUNITY_PACKAGES_ALLOW_TOOL_USAGE=true',
-		'-v', `${pkgDir}:/octen:ro`, '-v', `${io}:/io`,
-		'--entrypoint', 'sh', `n8nio/n8n:${N8N}`, '-c', script,
+		'run',
+		'--rm',
+		'-e',
+		'OCTEN_API_KEY',
+		'-e',
+		'N8N_BLOCK_ENV_ACCESS_IN_NODE=false',
+		'-e',
+		'N8N_DIAGNOSTICS_ENABLED=false',
+		'-e',
+		'N8N_CUSTOM_EXTENSIONS=/octen',
+		'-e',
+		'N8N_COMMUNITY_PACKAGES_ALLOW_TOOL_USAGE=true',
+		'-v',
+		`${pkgDir}:/octen:ro`,
+		'-v',
+		`${io}:/io`,
+		'--entrypoint',
+		'sh',
+		`n8nio/n8n:${N8N}`,
+		'-c',
+		script,
 	],
 	{ timeout: 900_000 },
 );
@@ -254,7 +493,9 @@ const parse = (text) => {
 	}
 };
 let failed = 0;
-console.log(`n8n ${N8N}, model ${MODEL}, ${cases.length} cases, ${Math.round((Date.now() - started) / 1000)} s`);
+console.log(
+	`n8n ${N8N}, model ${MODEL}, ${cases.length} cases, ${Math.round((Date.now() - started) / 1000)} s`,
+);
 for (const [wf, check] of cases) {
 	const text = readFileSync(join(io, `${wf.id}.out`), 'utf8');
 	const result = parse(text);
@@ -267,17 +508,37 @@ for (const [wf, check] of cases) {
 		const toolItems = toolRuns
 			.flatMap((r) => r.data?.ai_tool?.[0] ?? [])
 			.flatMap((i) => (Array.isArray(i.json?.response) ? i.json.response : [i.json]));
-		const answer = runData?.['AI Agent']?.[0]?.data?.main?.[0]?.[0]?.json?.output ?? '';
-		const hosts = toolItems.flatMap((i) => [i.url, i.website, i.source_page]).filter(Boolean).map(hostOf).filter(Boolean);
-		// The answer must cite something the tool returned, so a tool result the model never saw cannot pass
-		ok = toolRuns.length > 0 && toolItems.length > 0 && hosts.some((host) => answer.includes(host));
-		detail = `${toolRuns.length} tool calls, ${toolItems.length} tool items, answer: ${answer.slice(0, 160).replace(/\s+/g, ' ')}`;
+		const agentOutput = runData?.['AI Agent']?.[0]?.data?.main?.[0]?.[0]?.json ?? {};
+		const answer = agentOutput.output ?? '';
+		const prompt = wf.nodes.find((n) => n.name === 'AI Agent').parameters.text;
+		// The tool data must reach the model: some returned URL or title appears in what the agent observed
+		const observed = (agentOutput.intermediateSteps ?? [])
+			.map((step) => String(step.observation ?? ''))
+			.join('\n');
+		const delivered = toolItems.some((i) =>
+			[i.url, i.title].filter(Boolean).some((v) => observed.includes(String(v))),
+		);
+		// And the answer must cite a source the tool returned that the prompt did not already contain
+		const hosts = toolItems
+			.flatMap((i) => [i.url, i.website, i.source_page])
+			.filter(Boolean)
+			.map(hostOf)
+			.filter((host) => host && !prompt.includes(host));
+		const cited =
+			wf.id === 'agent_extract' ? answer.length > 0 : hosts.some((host) => answer.includes(host));
+		ok = toolRuns.length > 0 && toolItems.length > 0 && delivered && cited;
+		detail = `${toolRuns.length} tool calls, ${toolItems.length} tool items, delivered: ${delivered}, cited: ${cited}, answer: ${answer.slice(0, 160).replace(/\s+/g, ' ')}`;
 	} else {
 		const items = (runData?.Octen?.[0]?.data?.main?.[0] ?? []).map((i) => i.json);
 		ok = check(items);
 		const types = [...new Set(items.map((i) => i.type ?? (i.error ? 'error' : 'raw')))].join(', ');
 		detail = `${items.length} items, types: ${types || 'none'}`;
-		if (!ok && items.length === 0) detail += ` | ${text.split('\n').filter((l) => /rror|Unrecognized/.test(l)).slice(0, 2).join(' / ')}`;
+		if (!ok && items.length === 0)
+			detail += ` | ${text
+				.split('\n')
+				.filter((l) => /rror|Unrecognized/.test(l))
+				.slice(0, 2)
+				.join(' / ')}`;
 	}
 	if (!ok) failed++;
 	console.log(`${ok ? 'PASS' : 'FAIL'} ${wf.id}: ${detail}`);

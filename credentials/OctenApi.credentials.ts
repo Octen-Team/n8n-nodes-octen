@@ -1,10 +1,11 @@
 import type {
 	IAuthenticateGeneric,
 	Icon,
-	ICredentialTestRequest,
+	ICredentialTestFunction,
 	ICredentialType,
 	INodeProperties,
 } from 'n8n-workflow';
+import { octenApiTest } from './credentialTest';
 
 export class OctenApi implements ICredentialType {
 	name = 'octenApi';
@@ -42,20 +43,6 @@ export class OctenApi implements ICredentialType {
 		},
 	};
 
-	// An empty search fails validation (code 400) for a valid key, and only an invalid key gets code 401.
-	test: ICredentialTestRequest = {
-		request: {
-			baseURL: '={{ $credentials.baseUrl }}',
-			url: '/search',
-			method: 'POST',
-			body: {},
-			ignoreHttpStatusErrors: true,
-		},
-		rules: [
-			{
-				type: 'responseSuccessBody',
-				properties: { key: 'code', value: 401, message: 'The API key is not valid' },
-			},
-		],
-	};
+	// A function rather than a request, so that only a positive answer counts as success
+	test: ICredentialTestFunction = octenApiTest;
 }

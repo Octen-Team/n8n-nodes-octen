@@ -31,7 +31,9 @@ function convert(spec: OptionSpec, value: unknown): unknown {
 			if (typeof value === 'string' && value.trim() === '') return undefined;
 			const number = typeof value === 'number' ? value : Number(String(value).trim());
 			if (!Number.isFinite(number)) {
-				throw new OctenInputError(`${spec.displayName} must be a number, but got "${String(value)}"`);
+				throw new OctenInputError(
+					`${spec.displayName} must be a number, but got "${String(value)}"`,
+				);
 			}
 			return number;
 		}
@@ -51,7 +53,11 @@ function requireText(value: unknown, what: string): string {
 	return text;
 }
 
-function primaryBody(operation: OctenOperation, primary: IDataObject, options: IDataObject): IDataObject {
+function primaryBody(
+	operation: OctenOperation,
+	primary: IDataObject,
+	options: IDataObject,
+): IDataObject {
 	switch (operation) {
 		case 'extract': {
 			const urls = splitList(primary.urls);
@@ -80,7 +86,11 @@ function primaryBody(operation: OctenOperation, primary: IDataObject, options: I
  * Builds the request body for an operation. Options left empty are not sent, so the API defaults apply.
  * Field names and nesting follow the public OpenAPI spec (testdata/openapi.json).
  */
-export function buildBody(operation: OctenOperation, primary: IDataObject, options: IDataObject): IDataObject {
+export function buildBody(
+	operation: OctenOperation,
+	primary: IDataObject,
+	options: IDataObject,
+): IDataObject {
 	const spec = getOperation(operation);
 	const body = primaryBody(operation, primary, options);
 	const turnedOff: string[][] = [];
