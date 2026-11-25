@@ -39,7 +39,9 @@
   "n8n": {
     "n8nNodesApiVersion": 1,
     "strict": true,
-    "credentials": [],
+    "credentials": [
+      "dist/credentials/OctenApi.credentials.js"
+    ],
     "nodes": []
   },
   "devDependencies": {
