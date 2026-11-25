@@ -121,6 +121,25 @@ describe('toItems', () => {
 		expect(toItems('extract', ok({ results: [page] }), true)).toEqual([{ type: 'page', ...page }]);
 	});
 
+	it('keeps the images a search returns when Include Images is on', () => {
+		const images = [{ url: 'https://i/1.png', description: 'logo' }];
+		expect(toItems('search', ok({ results: [{ ...web, images }] }), true)).toEqual([{ ...simpleWeb, images }]);
+	});
+
+	it('keeps the links and media Extract returns when they are requested', () => {
+		const page = {
+			url: 'https://a.com',
+			status: 'success',
+			title: 'A',
+			full_content: 'text',
+			images: [{ url: 'https://a.com/1.png' }],
+			videos: [{ url: 'https://a.com/v.mp4' }],
+			audio: [{ url: 'https://a.com/a.mp3' }],
+			links: [{ url: 'https://b.com', anchor_text: 'B', is_external: true }],
+		};
+		expect(toItems('extract', ok({ results: [page] }), true)).toEqual([{ type: 'page', ...page }]);
+	});
+
 	it('returns no items when there are no results', () => {
 		expect(toItems('search', ok({ query: 'q', results: [] }), true)).toEqual([]);
 	});

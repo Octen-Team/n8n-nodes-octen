@@ -51,7 +51,8 @@ const nodeCase = (id, parameters, credential, extra = {}) =>
 		{ Start: { main: [[{ node: 'Octen', type: 'main', index: 0 }]] } },
 	);
 
-const agentCase = (id, operation, prompt) =>
+const fromAI = (key, description) => `={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('${key}', \`${description}\`, 'string') }}`;
+const agentCase = (id, operation, prompt, toolParameters = { query: fromAI('query', 'What to search for') }) =>
 	workflow(
 		id,
 		[
@@ -83,12 +84,7 @@ const agentCase = (id, operation, prompt) =>
 				type: `${NODE}Tool`,
 				typeVersion: 1,
 				position: [400, 200],
-				parameters: {
-					operation,
-					query: "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('query', `What to search for`, 'string') }}",
-					simplify: true,
-					options: {},
-				},
+				parameters: { operation, ...toolParameters, simplify: true, options: {} },
 				credentials: cred(),
 			},
 		],
@@ -100,6 +96,30 @@ const agentCase = (id, operation, prompt) =>
 	);
 
 const hasType = (type) => (items) => items.some((i) => i.type === type && (i.url || i.name));
+// Pulse Search in lite mode returns URLs without a scheme, such as "rust-lang.org/learn".
+const hostOf = (url) => {
+	try {
+		return new URL(/^[a-z]+:\/\//i.test(url) ? url : `https://${url}`).hostname;
+	} catch {
+		return '';
+	}
+};
+
+// Some cases need a value that only the API can give: an image URL to search by and a design group ID.
+const octen = async (path, body) => {
+	const response = await fetch(`https://api.octen.ai${path}`, {
+		method: 'POST',
+		headers: { 'content-type': 'application/json', 'x-api-key': process.env.OCTEN_API_KEY },
+		body: JSON.stringify(body),
+	});
+	return (await response.json()).data;
+};
+const imageUrl = (await octen('/image-search', { inputs: [{ type: 'text', data: 'red mid-century sofa' }], count: 1 })).results[0].url;
+const groupId = (await octen('/design-search', { query: 'SaaS pricing page', images: { count: 5 }, web_search: { enable: false } })).images.find(
+	(image) => image.group?.group_id,
+)?.group?.group_id;
+if (!imageUrl || !groupId) throw new Error('Could not get an image URL or a design group ID from the API');
+
 const CASES = [
 	[nodeCase('search', { operation: 'search', query: 'latest Rust release', simplify: true, options: { count: "={{ '3' }}" } }), hasType('web')],
 	[nodeCase('searchPremier', { operation: 'searchPremier', query: 'latest Rust release', simplify: true, options: { count: 3 } }), hasType('web')],
@@ -140,9 +160,64 @@ const CASES = [
 		(items) => items.length === 1 && /Invalid API Key/.test(items[0].error ?? ''),
 	],
 	[
-		agentCase('agentNews', 'newsSearch', 'What is new with the Rust programming language? Search once, then answer in two sentences with source URLs.'),
-		'agent',
+		nodeCase('searchFilters', { operation: 'search', query: 'Rust release notes', simplify: true, options: { includeDomains: 'rust-lang.org', timeRange: 'year', count: 3 } }),
+		(items) => items.length > 0 && items.every((i) => hostOf(i.url).endsWith('rust-lang.org')),
 	],
+	[
+		nodeCase('searchImages', { operation: 'search', query: 'Rust programming language logo', simplify: true, options: { includeImages: true, count: 3 } }),
+		(items) => items.some((i) => Array.isArray(i.images) && i.images.length > 0),
+	],
+	[
+		nodeCase('imageByUrl', { operation: 'imageSearch', inputType: 'image', imageUrl, simplify: true, options: { count: 3 } }),
+		hasType('image'),
+	],
+	[
+		nodeCase('placeNearby', {
+			operation: 'placeSearch',
+			query: 'coffee',
+			simplify: true,
+			options: { latitude: 47.6062, longitude: -122.3321, radius: 2000, placeCount: 3 },
+		}),
+		(items) => items.some((i) => i.type === 'place') && items.every((i) => i.type !== 'place' || i.distance === undefined || i.distance <= 2000),
+	],
+	[
+		nodeCase('designGroup', { operation: 'designSearch', query: '', simplify: true, options: { groupId, webResults: false } }),
+		hasType('design'),
+	],
+	[
+		nodeCase('extractLinks', {
+			operation: 'extract',
+			urls: 'https://www.rust-lang.org/',
+			simplify: true,
+			options: { includeLinks: true, maxLinks: 5, includeImages: true },
+		}),
+		(items) => items.length === 1 && Array.isArray(items[0].links) && items[0].links.length > 0 && items[0].links.length <= 5,
+	],
+	...[
+		['search', 'Find the official Rust programming language website. Search once, then answer with its URL.'],
+		['searchPremier', 'Find the release announcement of Rust 1.100. Search once, then answer in one sentence with the source URL.'],
+		['broadSearch', 'Compare Rust and Go for web backends. Search once, then answer in two sentences with source URLs.'],
+		['newsSearch', 'What is new with the Rust programming language? Search once, then answer in two sentences with source URLs.'],
+		['businessSearch', 'Who founded Stripe and when? Search once, then answer in one sentence with a source URL.'],
+		['pulseSearch', 'Find the official Rust programming language website. Search once, then answer with its URL.'],
+		['placeSearch', 'Find a coffee shop in Seattle. Search once, then give its name and website.'],
+		['imageSearch', 'Find an image of a red mid-century sofa. Search once, then give the image URL.'],
+		['videoSearch', 'Find a video of drone footage over mountains. Search once, then give the video URL.'],
+		['designSearch', 'Find a design of a SaaS pricing page. Search once, then give the image URL.'],
+		['extract', 'Read https://www.rust-lang.org/ with the tool, then say in one sentence what the page offers and give its URL.'],
+	].map(([operation, prompt]) => [
+		agentCase(
+			`agent_${operation}`,
+			operation,
+			prompt,
+			operation === 'extract'
+				? { urls: fromAI('urls', 'The URLs of the pages to read') }
+				: operation === 'imageSearch'
+					? { inputType: 'text', query: fromAI('query', 'A description of the images to find') }
+					: undefined,
+		),
+		'agent',
+	]),
 ];
 const only = args.only ? new Set(args.only.split(',')) : null;
 const cases = CASES.filter(([wf]) => !only || only.has(wf.id));
@@ -193,8 +268,9 @@ for (const [wf, check] of cases) {
 			.flatMap((r) => r.data?.ai_tool?.[0] ?? [])
 			.flatMap((i) => (Array.isArray(i.json?.response) ? i.json.response : [i.json]));
 		const answer = runData?.['AI Agent']?.[0]?.data?.main?.[0]?.[0]?.json?.output ?? '';
-		const hosts = toolItems.map((i) => i.url).filter(Boolean).map((u) => new URL(u).hostname);
-		ok = toolRuns.length > 0 && hosts.some((host) => answer.includes(host));
+		const hosts = toolItems.flatMap((i) => [i.url, i.website, i.source_page]).filter(Boolean).map(hostOf).filter(Boolean);
+		// The answer must cite something the tool returned, so a tool result the model never saw cannot pass
+		ok = toolRuns.length > 0 && toolItems.length > 0 && hosts.some((host) => answer.includes(host));
 		detail = `${toolRuns.length} tool calls, ${toolItems.length} tool items, answer: ${answer.slice(0, 160).replace(/\s+/g, ' ')}`;
 	} else {
 		const items = (runData?.Octen?.[0]?.data?.main?.[0] ?? []).map((i) => i.json);

@@ -49,7 +49,8 @@ const list = (value: unknown): IDataObject[] => (Array.isArray(value) ? value.fi
 
 const web = (result: IDataObject): IDataObject => ({
 	type: 'web',
-	...pick(result, ['title', 'url', 'highlight', 'full_content', 'time_published']),
+	// full_content and images are only returned when the user turns them on, so keep them when present
+	...pick(result, ['title', 'url', 'highlight', 'full_content', 'time_published', 'images']),
 });
 
 /**
@@ -117,7 +118,20 @@ export function toItems(operation: OctenOperation, body: IDataObject, simplify: 
 		case 'extract':
 			return results.map((r) => ({
 				type: 'page',
-				...pick(r, ['url', 'status', 'title', 'full_content', 'highlights', 'time_published', 'error_message']),
+				...pick(r, [
+					'url',
+					'status',
+					'title',
+					'full_content',
+					'highlights',
+					'time_published',
+					'error_message',
+					// Only returned when the matching Include option is on
+					'images',
+					'videos',
+					'audio',
+					'links',
+				]),
 			}));
 		default:
 			return results.map(web);
