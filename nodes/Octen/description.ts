@@ -116,10 +116,11 @@ export const properties: INodeProperties[] = [
 		name: 'urls',
 		type: 'string',
 		required: true,
+		typeOptions: { rows: 4 },
 		default: '',
 		placeholder: 'https://example.com/a, https://example.com/b',
 		description:
-			'The pages to extract (up to 20), one per line or separated by commas. Commas inside a URL are kept.',
+			'The pages to extract (up to 20), one per line or separated by a comma and a space. Commas inside a URL are kept.',
 		...show(['extract']),
 	},
 	{

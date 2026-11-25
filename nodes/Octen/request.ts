@@ -9,11 +9,11 @@ function splitList(value: unknown): string[] {
 	return parts.map((part) => String(part).trim()).filter((part) => part !== '');
 }
 
-/** URLs may contain commas, so a comma only separates two URLs when the next one starts with a scheme */
+/** URLs may contain commas, even other URLs, so only a new line or a comma followed by a space separates two */
 function splitUrls(value: unknown): string[] {
 	if (Array.isArray(value)) return splitList(value);
 	return String(value ?? '')
-		.split(/\n|,\s*(?=https?:\/\/)/i)
+		.split(/\n|,\s+/)
 		.map((url) => url.trim())
 		.filter((url) => url !== '');
 }

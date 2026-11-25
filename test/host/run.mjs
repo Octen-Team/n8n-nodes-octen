@@ -460,6 +460,8 @@ const CASES = [
 		'agent',
 	]),
 ];
+const unknown = only ? [...only].filter((id) => !CASES.some(([wf]) => wf.id === id)) : [];
+if (unknown.length > 0) throw new Error(`Unknown case names in --only: ${unknown.join(', ')}`);
 const cases = CASES.filter(([wf]) => selected(wf.id));
 writeFileSync(join(io, 'credentials.json'), JSON.stringify(credentials));
 writeFileSync(join(io, 'workflows.json'), JSON.stringify(cases.map(([wf]) => wf)));
@@ -538,12 +540,21 @@ for (const [wf, check] of cases) {
 		const delivered = evidence.filter(Boolean).some((v) => observed.includes(String(v)));
 		// And the answer must use what the tool returned: a returned URL that the prompt did not contain, the name
 		// of a returned place, or for Extract the returned page title.
-		const bare = (url) =>
-			String(url)
-				.replace(/^[a-z]+:\/\//i, '')
-				.replace(/^www\./, '')
-				.replace(/\/+$/, '');
-		const answerBare = bare(answer.toLowerCase());
+		// URLs compare whole: scheme, "www." and a trailing slash are ignored, the host is lower-cased, path and query keep their case
+		const normalize = (url) => {
+			const text = String(url).replace(/[).,;:!?*\]>"'`]+$/, '');
+			const withScheme = /^[a-z]+:\/\//i.test(text) ? text : `https://${text}`;
+			try {
+				const u = new URL(withScheme);
+				return `${u.hostname.replace(/^www\./, '')}${u.pathname.replace(/\/+$/, '')}${u.search}`;
+			} catch {
+				return '';
+			}
+		};
+		const answerUrls = new Set(
+			(answer.match(/https?:\/\/[^\s<>()[\]"'`*]+/g) ?? []).map(normalize),
+		);
+		const promptUrls = new Set((prompt.match(/https?:\/\/[^\s]+/g) ?? []).map(normalize));
 		const cited =
 			wf.id === 'agent_extract'
 				? toolItems.some((i) => i.status === 'success' && i.title && answer.includes(i.title))
@@ -551,8 +562,9 @@ for (const [wf, check] of cases) {
 					? toolItems.some((i) => i.name && answer.includes(i.name))
 					: toolItems
 							.flatMap((i) => [i.url, i.source_page])
-							.filter((url) => url && !prompt.includes(bare(url)))
-							.some((url) => answerBare.includes(bare(url).toLowerCase()));
+							.filter(Boolean)
+							.map(normalize)
+							.some((url) => url && !promptUrls.has(url) && answerUrls.has(url));
 		ok = toolRuns.length > 0 && toolItems.length > 0 && delivered && cited;
 		detail = `${toolRuns.length} tool calls, ${toolItems.length} tool items, delivered: ${delivered}, cited: ${cited}, answer: ${answer.slice(0, 160).replace(/\s+/g, ' ')}`;
 	} else {
@@ -608,12 +620,21 @@ for (const [wf, check] of cases) {
 		return { status: response.status, body: await response.json().catch(() => ({})) };
 	};
 	try {
-		// /healthz/readiness answers before the REST API is up on n8n 1.x, so wait for /rest/settings
+		// n8n 1.x answers /healthz/readiness before the REST API is up, and n8n 2.x answers /rest/settings with
+		// "n8n is starting up" while it starts, so wait until both answer for real
 		for (let i = 0; ; i++) {
-			const ready = await fetch(`${base}/rest/settings`).then(
+			const healthy = await fetch(`${base}/healthz/readiness`).then(
 				(r) => r.ok,
 				() => false,
 			);
+			const ready =
+				healthy &&
+				(await fetch(`${base}/rest/settings`)
+					.then((r) => r.json())
+					.then(
+						(body) => typeof body === 'object' && body !== null,
+						() => false,
+					));
 			if (ready) break;
 			if (i > 90) throw new Error('n8n server did not start');
 			await sleep(2000);
@@ -660,8 +681,11 @@ for (const [wf, check] of cases) {
 			console.log(`${ok ? 'PASS' : 'FAIL'} ${id}: ${result.status} ${result.message ?? ''}`);
 		}
 	} finally {
-		run('docker', ['rm', '-f', container]);
-		rmSync(serverFolder, { recursive: true, force: true });
+		try {
+			run('docker', ['rm', '-f', container]);
+		} finally {
+			rmSync(serverFolder, { recursive: true, force: true });
+		}
 	}
 }
 

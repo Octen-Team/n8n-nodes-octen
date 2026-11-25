@@ -42,6 +42,11 @@ const success = (results: object[]) => ({
 const result = { title: 'T', url: 'https://u' };
 
 describe('Octen node', () => {
+	it('lets users enter one URL per line for Extract', () => {
+		const urls = new Octen().description.properties.find((p) => p.name === 'urls');
+		expect(urls?.typeOptions?.rows).toBeGreaterThan(1);
+	});
+
 	it('sends one request per input item and pairs the output items', async () => {
 		const { ctx, calls } = context(
 			[
