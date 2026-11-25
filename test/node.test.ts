@@ -74,6 +74,25 @@ describe('Octen node', () => {
 		expect(out[0].json).toEqual({ type: 'web', title: 'T', url: 'https://u' });
 	});
 
+	it('reads only the inputs the selected operation uses', async () => {
+		// A hidden field can still hold an expression that fails, such as one that points at a deleted node
+		const failing = (name: string) => () => {
+			throw new Error(`${name} should not be read`);
+		};
+		for (const [params, unused] of [
+			[{ operation: 'search', query: 'a', options: {}, simplify: true }, ['inputType', 'imageUrl', 'urls']],
+			[{ operation: 'imageSearch', inputType: 'text', query: 'a', options: {}, simplify: true }, ['imageUrl', 'urls']],
+			[{ operation: 'imageSearch', inputType: 'image', imageUrl: 'https://i/1.png', options: {}, simplify: true }, ['query', 'urls']],
+			[{ operation: 'extract', urls: 'https://a.com', options: {}, simplify: true }, ['query', 'inputType', 'imageUrl']],
+		] as const) {
+			const { ctx } = context([params], [success([result])]);
+			const read = ctx.getNodeParameter;
+			ctx.getNodeParameter = (name: string, index: number, fallback?: unknown) =>
+				(unused as readonly string[]).includes(name) ? failing(name)() : read(name, index, fallback);
+			await expect(new Octen().execute.call(ctx as any), params.operation).resolves.toBeDefined();
+		}
+	});
+
 	it('gives Broad Search a longer timeout', async () => {
 		const { ctx, calls } = context(
 			[{ operation: 'broadSearch', query: 'a', options: {}, simplify: false }],

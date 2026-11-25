@@ -15,8 +15,6 @@ import { getOperation, type OctenOperation } from './operations';
 import { buildBody, OctenInputError } from './request';
 import { assertOk, OctenResponseError, toItems } from './response';
 
-const PRIMARY_PARAMETERS = ['query', 'inputType', 'imageUrl', 'urls'];
-
 export class Octen implements INodeType {
 	description: INodeTypeDescription = {
 		displayName: 'Octen',
@@ -45,9 +43,7 @@ export class Octen implements INodeType {
 			try {
 				const operation = this.getNodeParameter('operation', itemIndex) as OctenOperation;
 				const spec = getOperation(operation);
-				const primary: IDataObject = {};
-				for (const name of PRIMARY_PARAMETERS)
-					primary[name] = this.getNodeParameter(name, itemIndex, '');
+				const primary = readPrimary(this, operation, itemIndex);
 				const options = this.getNodeParameter('options', itemIndex, {}) as IDataObject;
 				const simplify = this.getNodeParameter('simplify', itemIndex, true) as boolean;
 
@@ -80,6 +76,26 @@ export class Octen implements INodeType {
 		}
 		return [output];
 	}
+}
+
+/**
+ * Reads only the inputs the operation uses. Reading a hidden one would still evaluate its expression,
+ * which can fail, for example when it points at a node that was deleted.
+ */
+function readPrimary(
+	context: IExecuteFunctions,
+	operation: OctenOperation,
+	itemIndex: number,
+): IDataObject {
+	const read = (name: string) => context.getNodeParameter(name, itemIndex, '');
+	if (operation === 'extract') return { urls: read('urls') };
+	if (operation === 'imageSearch') {
+		const inputType = read('inputType');
+		return inputType === 'image'
+			? { inputType, imageUrl: read('imageUrl') }
+			: { inputType, query: read('query') };
+	}
+	return { query: read('query') };
 }
 
 function toNodeError(context: IExecuteFunctions, error: unknown, itemIndex: number) {

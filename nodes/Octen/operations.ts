@@ -282,21 +282,31 @@ const webSearchOptions = (prefix: string[]): OptionSpec[] => [
 ];
 
 /** The web result options of Place Search and Design Search, under web_search */
-const webResultOptions = (enabledByDefault: boolean): OptionSpec[] => [
-	{
-		name: 'webResults',
-		displayName: 'Web Results',
-		path: ['web_search', 'enable'],
-		kind: 'boolean',
-		default: enabledByDefault,
-		description: 'Whether to also return web results',
-	},
-	count(['web_search', 'count'], 100, 'Web Count', 'web results'),
-	...contentOptions(['web_search']),
-	...domainOptions(['web_search']),
-	language(['web_search', 'language']),
-	...timeOptions(['web_search']),
-];
+const webResultOptions = (enabledByDefault: boolean): OptionSpec[] => {
+	const options: OptionSpec[] = [
+		{
+			name: 'webResults',
+			displayName: 'Web Results',
+			path: ['web_search', 'enable'],
+			kind: 'boolean',
+			default: enabledByDefault,
+			description: 'Whether to also return web results',
+		},
+		count(['web_search', 'count'], 100, 'Web Count', 'web results'),
+		...contentOptions(['web_search']),
+		...domainOptions(['web_search']),
+		language(['web_search', 'language']),
+		...timeOptions(['web_search']),
+	];
+	const note = enabledByDefault
+		? 'Applies to the web results only'
+		: 'Applies to the web results only, which Web Results turns on';
+	return options.map((option) =>
+		option.name === 'webResults'
+			? option
+			: { ...option, description: `${option.description.replace(/\.$/, '')}. ${note}` },
+	);
+};
 
 const newsOrBusinessBase = (): OptionSpec[] => [
 	count(['count'], 100),
@@ -526,7 +536,7 @@ export const OPERATIONS: OperationSpec[] = [
 		value: 'videoSearch',
 		name: 'Video Search',
 		action: 'Search videos',
-		description: 'Search videos by text',
+		description: 'Search videos by text. Needs Video Search access, which you request from Octen.',
 		endpoint: '/video-search',
 		options: [
 			count(['count'], 10),

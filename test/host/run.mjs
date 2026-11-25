@@ -56,6 +56,12 @@ const installInto = (userFolder) => {
 	);
 };
 installInto(join(work, 'n8n'));
+// The container user may write only where n8n keeps its data and where the cases write their output.
+// The package and the test inputs stay read-only, so nothing else on the machine can change the code that runs with the key.
+const openForContainer = (userFolder) => {
+	run('chmod', ['-R', 'u+rwX,go+rX,go-w', userFolder]);
+	run('chmod', ['go+w', userFolder]);
+};
 
 const KEY = '={{ $env.OCTEN_API_KEY }}';
 const credentials = [
@@ -216,7 +222,8 @@ const CASES = [
 			simplify: true,
 			options: { count: "={{ '3' }}" },
 		}),
-		hasType('web'),
+		// Count comes from an expression; Octen's default is 5, so exactly 3 proves the value was applied
+		(items) => items.length === 3 && hasType('web')(items),
 	],
 	[
 		nodeCase('searchPremier', {
@@ -488,7 +495,9 @@ writeFileSync(
 		(name) => fixtures[name],
 	),
 );
-run('chmod', ['-R', 'a+rwX', work]);
+openForContainer(join(work, 'n8n'));
+run('chmod', ['-R', 'u+rwX,go+rX,go-w', io]);
+run('chmod', ['go+w', io]);
 
 const ids = cases.map(([wf]) => wf.id).join(' ');
 const script = [
@@ -613,7 +622,7 @@ for (const [wf, check] of cases) {
 	// This folder ends up holding the real key (encrypted by n8n), so it is always deleted below
 	const serverFolder = join(work, 'server');
 	installInto(serverFolder);
-	run('chmod', ['-R', 'a+rwX', serverFolder]);
+	openForContainer(serverFolder);
 	const port = args.port ?? '5689';
 	const container = `octen-n8n-host-${process.pid}`;
 	run('docker', [

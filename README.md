@@ -38,7 +38,7 @@ n8n checks the key when you save the credential.
 | Pulse Search | Fast web results for real-time use |
 | Place Search | Place cards for businesses and points of interest, with optional web results |
 | Image Search | Images that match a description or look like a given image |
-| Video Search | Videos that match a description |
+| Video Search | Videos that match a description. Needs Video Search access: contact Octen to request it |
 | Design Search | Web page, app screen and slide designs, with optional web results |
 | Extract | The content of up to 20 web pages |
 
