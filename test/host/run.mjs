@@ -30,9 +30,11 @@ const run = (cmd, argv, opts = {}) =>
 mkdirSync(join(root, '.host-test'), { recursive: true });
 const work = mkdtempSync(join(root, '.host-test', 'run-'));
 const io = join(work, 'io');
+const inputs = join(work, 'in');
 const PACKAGE = 'n8n-nodes-octen-official';
 const pkgDir = join(work, 'package');
 mkdirSync(io);
+mkdirSync(inputs);
 mkdirSync(pkgDir);
 run('npm', ['run', 'build'], { cwd: root });
 const tarball = run('npm', ['pack', '--silent', '--pack-destination', work], { cwd: root })
@@ -41,27 +43,30 @@ const tarball = run('npm', ['pack', '--silent', '--pack-destination', work], { c
 	.pop();
 run('tar', ['-xzf', join(work, tarball), '-C', pkgDir, '--strip-components=1']);
 
-/** An n8n user folder with the package installed as a community package */
-const installInto = (userFolder) => {
-	const nodesDir = join(userFolder, 'nodes');
-	mkdirSync(join(nodesDir, 'node_modules'), { recursive: true });
-	run('cp', ['-R', pkgDir, join(nodesDir, 'node_modules', PACKAGE)]);
-	writeFileSync(
-		join(nodesDir, 'package.json'),
-		JSON.stringify({
-			name: 'installed-nodes',
-			private: true,
-			dependencies: { [PACKAGE]: '0.1.0' },
-		}),
-	);
-};
-installInto(join(work, 'n8n'));
-// The container user may write only where n8n keeps its data and where the cases write their output.
-// The package and the test inputs stay read-only, so nothing else on the machine can change the code that runs with the key.
-const openForContainer = (userFolder) => {
+// The package is installed the way n8n installs community packages, as <user folder>/nodes/node_modules/<package>.
+// It and the test inputs are mounted read-only; the container may write only n8n's own data and the case output.
+const nodesPackageJson = join(work, 'nodes-package.json');
+writeFileSync(
+	nodesPackageJson,
+	JSON.stringify({ name: 'installed-nodes', private: true, dependencies: { [PACKAGE]: '0.1.0' } }),
+);
+/** A writable n8n user folder whose nodes folder (the package) the container cannot change */
+const userFolderMounts = (userFolder) => {
+	mkdirSync(join(userFolder, 'nodes', 'node_modules', PACKAGE), { recursive: true });
+	writeFileSync(join(userFolder, 'nodes', 'package.json'), '');
 	run('chmod', ['-R', 'u+rwX,go+rX,go-w', userFolder]);
 	run('chmod', ['go+w', userFolder]);
+	return [
+		'-v',
+		`${userFolder}:/home/node/.n8n`,
+		'-v',
+		`${pkgDir}:/home/node/.n8n/nodes/node_modules/${PACKAGE}:ro`,
+		'-v',
+		`${nodesPackageJson}:/home/node/.n8n/nodes/package.json:ro`,
+	];
 };
+run('chmod', ['-R', 'u+rwX,go+rX,go-w', pkgDir]);
+run('chmod', ['go+r', nodesPackageJson]);
 
 const KEY = '={{ $env.OCTEN_API_KEY }}';
 const credentials = [
@@ -487,22 +492,21 @@ const fixtures = {
 if (!fixtures.__IMAGE_URL__ || !fixtures.__GROUP_ID__) {
 	throw new Error('Could not get an image URL or a design group ID from the API');
 }
-writeFileSync(join(io, 'credentials.json'), JSON.stringify(credentials));
+writeFileSync(join(inputs, 'credentials.json'), JSON.stringify(credentials));
 writeFileSync(
-	join(io, 'workflows.json'),
+	join(inputs, 'workflows.json'),
 	JSON.stringify(cases.map(([wf]) => wf)).replace(
 		/__IMAGE_URL__|__GROUP_ID__/g,
 		(name) => fixtures[name],
 	),
 );
-openForContainer(join(work, 'n8n'));
-run('chmod', ['-R', 'u+rwX,go+rX,go-w', io]);
+run('chmod', ['-R', 'u+rwX,go+rX,go-w', inputs]);
 run('chmod', ['go+w', io]);
 
 const ids = cases.map(([wf]) => wf.id).join(' ');
 const script = [
-	'n8n import:credentials --input=/io/credentials.json >/dev/null 2>&1',
-	'n8n import:workflow --input=/io/workflows.json >/dev/null 2>&1',
+	'n8n import:credentials --input=/in/credentials.json >/dev/null 2>&1',
+	'n8n import:workflow --input=/in/workflows.json >/dev/null 2>&1',
 	`for id in ${ids}; do n8n execute --id=$id --rawOutput > /io/$id.out 2>&1; done; true`,
 ].join(' && ');
 const started = Date.now();
@@ -519,8 +523,9 @@ run(
 		'N8N_DIAGNOSTICS_ENABLED=false',
 		'-e',
 		'N8N_COMMUNITY_PACKAGES_ALLOW_TOOL_USAGE=true',
+		...userFolderMounts(join(work, 'n8n')),
 		'-v',
-		`${join(work, 'n8n')}:/home/node/.n8n`,
+		`${inputs}:/in:ro`,
 		'-v',
 		`${io}:/io`,
 		'--entrypoint',
@@ -621,8 +626,6 @@ for (const [wf, check] of cases) {
 {
 	// This folder ends up holding the real key (encrypted by n8n), so it is always deleted below
 	const serverFolder = join(work, 'server');
-	installInto(serverFolder);
-	openForContainer(serverFolder);
 	const port = args.port ?? '5689';
 	const container = `octen-n8n-host-${process.pid}`;
 	run('docker', [
@@ -636,8 +639,7 @@ for (const [wf, check] of cases) {
 		'N8N_DIAGNOSTICS_ENABLED=false',
 		'-e',
 		'N8N_SECURE_COOKIE=false',
-		'-v',
-		`${serverFolder}:/home/node/.n8n`,
+		...userFolderMounts(serverFolder),
 		`n8nio/n8n:${N8N}`,
 	]);
 	const base = `http://127.0.0.1:${port}`;

@@ -405,7 +405,15 @@ export const OPERATIONS: OperationSpec[] = [
 		options: [
 			...withNote(
 				newsOrBusinessBase(),
-				['language'],
+				[
+					'includeDomains',
+					'excludeDomains',
+					'timeBasis',
+					'timeRange',
+					'startTime',
+					'endTime',
+					'language',
+				],
 				'Applies to the web results, not to the entity cards',
 			),
 			{
