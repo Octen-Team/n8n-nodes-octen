@@ -1,12 +1,27 @@
-import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
+import openapi from '../testdata/openapi.json';
 import { OPERATIONS } from '../nodes/Octen/operations';
 
 // Every option must name a real request field, and its choices and bounds must match the public spec.
-type Schema = Record<string, any>;
-const spec: Schema = JSON.parse(
-	readFileSync(new URL('../testdata/openapi.json', import.meta.url), 'utf8'),
-);
+interface Schema {
+	$ref?: string;
+	type?: string;
+	properties?: Record<string, Schema>;
+	allOf?: Schema[];
+	anyOf?: Schema[];
+	oneOf?: Schema[];
+	items?: Schema;
+	enum?: unknown[];
+	minimum?: number;
+	maximum?: number;
+}
+interface Spec {
+	paths: Record<
+		string,
+		{ post?: { requestBody: { content: Record<string, { schema: Schema }> } } }
+	>;
+}
+const spec = openapi as unknown as Spec;
 
 function resolve(schema: Schema): Schema {
 	let current = schema;
@@ -14,14 +29,14 @@ function resolve(schema: Schema): Schema {
 		current = current.$ref
 			.replace(/^#\//, '')
 			.split('/')
-			.reduce((node: Schema, key: string) => node[key], spec);
+			.reduce<unknown>((node, key) => (node as Record<string, unknown>)[key], spec) as Schema;
 	}
 	return current;
 }
 
-function properties(schema: Schema): Schema {
+function properties(schema: Schema): Record<string, Schema> {
 	const s = resolve(schema);
-	const merged: Schema = { ...(s.properties ?? {}) };
+	const merged: Record<string, Schema> = { ...(s.properties ?? {}) };
 	for (const part of [...(s.allOf ?? []), ...(s.anyOf ?? []), ...(s.oneOf ?? [])])
 		Object.assign(merged, properties(part));
 	return merged;
@@ -29,7 +44,7 @@ function properties(schema: Schema): Schema {
 
 function fieldAt(endpoint: string, path: string[]): Schema | undefined {
 	let schema: Schema | undefined =
-		spec.paths[endpoint].post.requestBody.content['application/json'].schema;
+		spec.paths[endpoint].post?.requestBody.content['application/json'].schema;
 	for (const key of path) {
 		if (!schema) return undefined;
 		schema = properties(schema)[key];

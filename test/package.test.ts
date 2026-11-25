@@ -1,8 +1,7 @@
-import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
+import pkg from '../package.json';
 
 // Rules from the n8n verification guidelines for community nodes.
-const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
 
 describe('package.json', () => {
 	it('uses an n8n community node name without a dot in the package part', () => {

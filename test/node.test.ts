@@ -1,4 +1,9 @@
-import { NodeApiError, NodeOperationError } from 'n8n-workflow';
+import {
+	NodeApiError,
+	NodeOperationError,
+	type IExecuteFunctions,
+	type IHttpRequestOptions,
+} from 'n8n-workflow';
 import { describe, expect, it } from 'vitest';
 import { Octen } from '../nodes/Octen/Octen.node';
 
@@ -24,7 +29,7 @@ function context(
 		getNode: () => ({ name: 'Octen', type: 'octen', typeVersion: 1, parameters: {} }),
 		continueOnFail: () => continueOnFail,
 		helpers: {
-			httpRequestWithAuthentication: async (credential: string, request: any) => {
+			httpRequestWithAuthentication: async (credential: string, request: IHttpRequestOptions) => {
 				calls.push({ credential, url: request.url, body: request.body, timeout: request.timeout });
 				const response = responses[calls.length - 1];
 				if (!response) throw new Error('unexpected request');
@@ -55,7 +60,7 @@ describe('Octen node', () => {
 			],
 			[success([result]), success([result, result])],
 		);
-		const [out] = await new Octen().execute.call(ctx as any);
+		const [out] = await new Octen().execute.call(ctx as unknown as IExecuteFunctions);
 		expect(calls).toEqual([
 			{
 				credential: 'octenApi',
@@ -80,16 +85,39 @@ describe('Octen node', () => {
 			throw new Error(`${name} should not be read`);
 		};
 		for (const [params, unused] of [
-			[{ operation: 'search', query: 'a', options: {}, simplify: true }, ['inputType', 'imageUrl', 'urls']],
-			[{ operation: 'imageSearch', inputType: 'text', query: 'a', options: {}, simplify: true }, ['imageUrl', 'urls']],
-			[{ operation: 'imageSearch', inputType: 'image', imageUrl: 'https://i/1.png', options: {}, simplify: true }, ['query', 'urls']],
-			[{ operation: 'extract', urls: 'https://a.com', options: {}, simplify: true }, ['query', 'inputType', 'imageUrl']],
+			[
+				{ operation: 'search', query: 'a', options: {}, simplify: true },
+				['inputType', 'imageUrl', 'urls'],
+			],
+			[
+				{ operation: 'imageSearch', inputType: 'text', query: 'a', options: {}, simplify: true },
+				['imageUrl', 'urls'],
+			],
+			[
+				{
+					operation: 'imageSearch',
+					inputType: 'image',
+					imageUrl: 'https://i/1.png',
+					options: {},
+					simplify: true,
+				},
+				['query', 'urls'],
+			],
+			[
+				{ operation: 'extract', urls: 'https://a.com', options: {}, simplify: true },
+				['query', 'inputType', 'imageUrl'],
+			],
 		] as const) {
 			const { ctx } = context([params], [success([result])]);
 			const read = ctx.getNodeParameter;
 			ctx.getNodeParameter = (name: string, index: number, fallback?: unknown) =>
-				(unused as readonly string[]).includes(name) ? failing(name)() : read(name, index, fallback);
-			await expect(new Octen().execute.call(ctx as any), params.operation).resolves.toBeDefined();
+				(unused as readonly string[]).includes(name)
+					? failing(name)()
+					: read(name, index, fallback);
+			await expect(
+				new Octen().execute.call(ctx as unknown as IExecuteFunctions),
+				params.operation,
+			).resolves.toBeDefined();
 		}
 	});
 
@@ -98,7 +126,7 @@ describe('Octen node', () => {
 			[{ operation: 'broadSearch', query: 'a', options: {}, simplify: false }],
 			[{ statusCode: 200, body: { code: 0, data: { search_results: [] } } }],
 		);
-		await new Octen().execute.call(ctx as any);
+		await new Octen().execute.call(ctx as unknown as IExecuteFunctions);
 		expect(calls[0].timeout).toBe(120000);
 	});
 
@@ -107,7 +135,9 @@ describe('Octen node', () => {
 			[{ operation: 'search', query: 'a', options: {}, simplify: true }],
 			[{ statusCode: 200, body: { code: 1001, msg: 'Quota exceeded', request_id: 'r9' } }],
 		);
-		const error = await new Octen().execute.call(ctx as any).catch((e) => e);
+		const error = await new Octen().execute
+			.call(ctx as unknown as IExecuteFunctions)
+			.catch((e) => e);
 		expect(error).toBeInstanceOf(NodeApiError);
 		expect(error.message).toBe('Quota exceeded');
 		expect(error.description).toBe('Request ID: r9');
@@ -119,7 +149,9 @@ describe('Octen node', () => {
 			[{ operation: 'search', query: ' ', options: {}, simplify: true }],
 			[],
 		);
-		const error = await new Octen().execute.call(ctx as any).catch((e) => e);
+		const error = await new Octen().execute
+			.call(ctx as unknown as IExecuteFunctions)
+			.catch((e) => e);
 		expect(error).toBeInstanceOf(NodeOperationError);
 		expect(calls).toEqual([]);
 	});
@@ -136,7 +168,7 @@ describe('Octen node', () => {
 			],
 			true,
 		);
-		const [out] = await new Octen().execute.call(ctx as any);
+		const [out] = await new Octen().execute.call(ctx as unknown as IExecuteFunctions);
 		expect(out).toEqual([
 			{ json: { type: 'web', title: 'T', url: 'https://u' }, pairedItem: { item: 0 } },
 			{ json: { error: 'Invalid API Key.' }, pairedItem: { item: 1 } },
