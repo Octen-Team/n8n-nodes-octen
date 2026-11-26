@@ -1,0 +1,18 @@
+{
+	"node": "n8n-nodes-octen-official.octen",
+	"nodeVersion": "1.0",
+	"codexVersion": "1.0",
+	"categories": ["Data & Storage", "Development"],
+	"resources": {
+		"credentialDocumentation": [
+			{
+				"url": "https://docs.octen.ai/overview/quickstart"
+			}
+		],
+		"primaryDocumentation": [
+			{
+				"url": "https://github.com/Octen-Team/n8n-nodes-octen#readme"
+			}
+		]
+	}
+}
