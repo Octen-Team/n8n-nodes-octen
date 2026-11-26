@@ -1,6 +1,6 @@
 # n8n-nodes-octen-official
 
-An [n8n](https://n8n.io/) community node for the [Octen](https://octen.ai) API. Search the web, news, companies, places, images, videos and designs, and extract the content of web pages, in your workflows or as a tool for the n8n AI Agent.
+The official [n8n](https://n8n.io/) community node for the [Octen](https://octen.ai) API, built and maintained by Octen. Search the web, news, companies, places, images, videos and designs, and extract the content of web pages, in your workflows or as a tool for the n8n AI Agent.
 
 [Installation](#installation) ·
 [Credentials](#credentials) ·
