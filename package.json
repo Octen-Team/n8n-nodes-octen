@@ -1,7 +1,7 @@
 {
   "name": "n8n-nodes-octen-official",
   "version": "0.1.1",
-  "description": "n8n community node for the Octen API: web, news, business, place and media search, plus page extraction",
+  "description": "Official n8n community node for the Octen API: web, news, business, place and media search, plus page extraction",
   "license": "MIT",
   "homepage": "https://github.com/Octen-Team/n8n-nodes-octen#readme",
   "bugs": {

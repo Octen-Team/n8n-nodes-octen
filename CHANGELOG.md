@@ -2,7 +2,8 @@
 
 ## 0.1.1
 
-- First release published from GitHub Actions with npm provenance. No code changes from 0.1.0.
+- First release published from GitHub Actions with npm provenance.
+- The README and package description now state that this is the official Octen package. No code changes from 0.1.0.
 
 ## 0.1.0
 
